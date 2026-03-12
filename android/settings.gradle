@@ -1,0 +1,19 @@
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+        maven { 
+            url = uri("../node_modules/@react-native-async-storage/async-storage/android/local_repo")
+        }
+    }
+}
+
+rootProject.name = 'FocusFlow'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')
