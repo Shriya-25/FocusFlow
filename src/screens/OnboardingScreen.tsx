@@ -9,15 +9,11 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BRAND } from '../utils/brand';
 
-const BRAND = {
-  bgStart: '#1B1B2F',
-  bgEnd: '#3A1C71',
-  violet: '#815cf0',
-  magenta: '#ff4b8b',
-  peach: '#ff9068',
-  textDim: '#D1D5DB',
-  white20: 'rgba(255, 255, 255, 0.2)',
+type OnboardingScreenProps = {
+  onComplete?: () => void;
+  onLoginPress?: () => void;
 };
 
 const screens = [
@@ -41,7 +37,10 @@ const screens = [
   },
 ];
 
-const OnboardingScreen: React.FC = () => {
+const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
+  onComplete,
+  onLoginPress,
+}) => {
   const insets = useSafeAreaInsets();
   const [currentScreen, setCurrentScreen] = useState(0);
   const pulseAnim = useRef(new Animated.Value(0.95)).current;
@@ -95,7 +94,7 @@ const OnboardingScreen: React.FC = () => {
       return;
     }
 
-    console.log('Onboarding complete. Navigate to auth/home screen.');
+    onComplete?.();
   };
 
   const handleBack = () => {
@@ -321,7 +320,7 @@ const OnboardingScreen: React.FC = () => {
         </TouchableOpacity>
 
         {currentScreen === screens.length - 1 ? (
-          <TouchableOpacity activeOpacity={0.8}>
+          <TouchableOpacity activeOpacity={0.8} onPress={onLoginPress}>
             <Text style={styles.loginText}>ALREADY HAVE AN ACCOUNT? LOG IN</Text>
           </TouchableOpacity>
         ) : null}
