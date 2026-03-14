@@ -28,6 +28,10 @@ build/
 .idea
 .gradle
 local.properties
+
+# Firebase config (contains sensitive API keys - keep out of version control)
+google-services.json
+google-services\ (2).json
 *.iml
 *.hprof
 .cxx/
