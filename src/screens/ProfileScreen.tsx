@@ -7,6 +7,7 @@ import {
   ScrollView,
   Image,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,11 +20,25 @@ const ORANGE = BRAND.peach;
 
 const TOTAL_REQUIRED_POMODOROS = 300;
 const COMPLETED_POMODOROS = 12;
+const QUOTE_ROTATION: string[] = [
+  'The secret of getting ahead is getting started.',
+  'Success is the sum of small efforts repeated day in and day out.',
+  'Discipline is choosing between what you want now and what you want most.',
+  'Your future is created by what you do today, not tomorrow.',
+  'Do not wait to strike till the iron is hot; make it hot by striking.',
+  'Small focus sessions build big momentum.',
+  'Consistency beats intensity when it comes to mastery.',
+  'Protect your focus and your goals will protect your future.',
+  'Progress grows where attention goes.',
+];
 
 type Props = {
   userName?: string;
   userPhoto?: string | null;
   selectedAvatar?: string;
+  isGuest?: boolean;
+  isSigningIn?: boolean;
+  onGuestSignIn?: () => void;
   onBack?: () => void;
 };
 
@@ -31,15 +46,36 @@ export default function ProfileScreen({
   userName = 'Shriya',
   userPhoto,
   selectedAvatar = '🦁',
+  isGuest = false,
+  isSigningIn = false,
+  onGuestSignIn,
   onBack,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const [nowMs, setNowMs] = React.useState(Date.now());
+
+  React.useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNowMs(Date.now());
+    }, 60 * 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
 
   const progressPercent = useMemo(
     () => Math.round((COMPLETED_POMODOROS / TOTAL_REQUIRED_POMODOROS) * 100),
     [],
   );
   const remainingPomodoros = TOTAL_REQUIRED_POMODOROS - COMPLETED_POMODOROS;
+  const quoteOfTheSlot = useMemo(() => {
+    const now = new Date(nowMs);
+    const slot = Math.floor(now.getHours() / 8);
+    const dayNumber = Math.floor(nowMs / (24 * 60 * 60 * 1000));
+    const quoteIndex = (dayNumber * 3 + slot) % QUOTE_ROTATION.length;
+    return QUOTE_ROTATION[quoteIndex];
+  }, [nowMs]);
 
   return (
     <View style={s.root}>
@@ -78,16 +114,44 @@ export default function ProfileScreen({
 
           <Text style={s.userName}>{userName}</Text>
           <Text style={s.userSubtitle}>Deep Work Enthusiast</Text>
+
+          {isGuest ? (
+            <View style={s.guestPromptWrap}>
+              <Text style={s.guestPromptText}>Sign in to sync your progress.</Text>
+              <Pressable
+                onPress={onGuestSignIn}
+                disabled={isSigningIn}
+                style={s.guestLoginButtonWrap}
+                android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
+              >
+                <LinearGradient
+                  colors={['#FFFFFF', 'rgba(255,255,255,0.95)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={s.guestLoginButton}
+                >
+                  {isSigningIn ? (
+                    <ActivityIndicator size="small" color="#111827" />
+                  ) : (
+                    <>
+                      <Text style={s.googleGlyph}>G</Text>
+                      <Text style={s.guestLoginButtonText}>Continue with Google</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         <View style={s.statsRow}>
           <View style={s.glassCardHalf}>
             <Text style={s.statLabel}>TOTAL FOCUS TIME</Text>
-            <Text style={s.statValue}>120 Hours</Text>
+            <Text style={s.statValue}>{isGuest ? '' : '120 Hours'}</Text>
           </View>
           <View style={s.glassCardHalf}>
             <Text style={s.statLabel}>CURRENT STREAK</Text>
-            <Text style={s.statValue}>5 Days</Text>
+            <Text style={s.statValue}>{isGuest ? '' : '5 Days'}</Text>
           </View>
         </View>
 
@@ -129,7 +193,7 @@ export default function ProfileScreen({
             end={{ x: 1, y: 1 }}
             style={s.quotePanel}
           >
-            <Text style={s.quoteText}>"The secret of getting ahead is getting started."</Text>
+            <Text style={s.quoteText}>"{quoteOfTheSlot}"</Text>
           </LinearGradient>
         </View>
 
@@ -215,6 +279,43 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  guestPromptWrap: {
+    marginTop: 14,
+    width: '100%',
+    alignItems: 'center',
+    gap: 10,
+  },
+  guestPromptText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  guestLoginButtonWrap: {
+    width: '100%',
+    maxWidth: 290,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  guestLoginButton: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  googleGlyph: {
+    color: '#EA4335',
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  guestLoginButtonText: {
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 
   statsRow: {
     flexDirection: 'row',
@@ -241,6 +342,7 @@ const s = StyleSheet.create({
     marginTop: 7,
     fontSize: 22,
     fontWeight: '700',
+    minHeight: 28,
   },
 
   glassCardFull: {

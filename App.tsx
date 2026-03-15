@@ -18,8 +18,16 @@ function App() {
   const [userName, setUserName] = React.useState('');
   const [userPhoto, setUserPhoto] = React.useState<string | null>(null);
   const [selectedAvatar, setSelectedAvatar] = React.useState('🦁');
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const [isSigningIn, setIsSigningIn] = React.useState(false);
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (targetScreen: 'home' | 'profile' = 'home') => {
+    if (isSigningIn) {
+      return;
+    }
+
+    setIsSigningIn(true);
+
     try {
       const { signInWithGoogle } = await import('./src/services/authService');
       const userCredential = await signInWithGoogle();
@@ -27,15 +35,20 @@ function App() {
       const photo = userCredential.user.photoURL ?? null;
       setUserName(name);
       setUserPhoto(photo);
-      setScreen('home');
+      setIsAuthenticated(true);
+      setScreen(targetScreen);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to sign in right now.';
       Alert.alert('Google Sign-In failed', message);
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
   const handleSkip = () => {
     setUserName('Guest');
+    setUserPhoto(null);
+    setIsAuthenticated(false);
     setScreen('home');
   };
 
@@ -47,13 +60,15 @@ function App() {
           onLoginPress={() => setScreen('gmail-login')}
         />
       ) : screen === 'gmail-login' ? (
-        <GmailLoginScreen onGoogleLogin={handleGoogleLogin} onSkip={handleSkip} />
+        <GmailLoginScreen onGoogleLogin={() => handleGoogleLogin('home')} onSkip={handleSkip} />
       ) : screen === 'profile' ? (
         <ProfileScreen
           userName={userName}
           userPhoto={userPhoto}
           selectedAvatar={selectedAvatar}
-          onAvatarChange={setSelectedAvatar}
+          isGuest={!isAuthenticated}
+          isSigningIn={isSigningIn}
+          onGuestSignIn={() => handleGoogleLogin('profile')}
           onBack={() => setScreen('home')}
         />
       ) : (
