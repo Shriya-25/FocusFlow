@@ -119,7 +119,7 @@ export default function ProfileScreen({
             <View style={s.guestPromptWrap}>
               <Text style={s.guestPromptText}>Sign in to sync your progress.</Text>
               <Pressable
-                onPress={onGuestSignIn}
+                onPress={() => onGuestSignIn?.()}
                 disabled={isSigningIn}
                 style={s.guestLoginButtonWrap}
                 android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
@@ -159,7 +159,9 @@ export default function ProfileScreen({
           <View style={s.badgeTopRow}>
             <View>
               <Text style={s.badgeTitle}>Gold Focus Badge</Text>
-              <Text style={s.badgeSubtitle}>{COMPLETED_POMODOROS} Pomodoros Completed</Text>
+              <Text style={s.badgeSubtitle}>
+                {isGuest ? 'Sign in to view badge progress' : `${COMPLETED_POMODOROS} Pomodoros Completed`}
+              </Text>
             </View>
             <View style={s.badgeIconWrap}>
               <CrownIcon size={26} color={ORANGE} />
@@ -168,24 +170,32 @@ export default function ProfileScreen({
 
           <View style={s.progressHeaderRow}>
             <Text style={s.progressLabel}>PROGRESS</Text>
-            <Text style={s.progressPercent}>{progressPercent}%</Text>
+            <Text style={s.progressPercent}>{isGuest ? '' : `${progressPercent}%`}</Text>
           </View>
           <View style={s.progressTrack}>
             <LinearGradient
               colors={[PURPLE, PINK, ORANGE]}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
-              style={[s.progressFill, { width: `${progressPercent}%` }]}
+              style={[
+                s.progressFill,
+                {
+                  width: isGuest ? '0%' : `${progressPercent}%`,
+                  minWidth: isGuest ? 0 : 10,
+                },
+              ]}
             />
           </View>
 
-          <View style={s.infoRow}>
-            <InfoIcon size={16} color="rgba(255,255,255,0.6)" />
-            <Text style={s.infoText}>
-              Complete <Text style={s.infoTextStrong}>{remainingPomodoros} more Pomodoros</Text> to unlock the
-              Gold Focus Badge.
-            </Text>
-          </View>
+          {!isGuest ? (
+            <View style={s.infoRow}>
+              <InfoIcon size={16} color="rgba(255,255,255,0.6)" />
+              <Text style={s.infoText}>
+                Complete <Text style={s.infoTextStrong}>{remainingPomodoros} more Pomodoros</Text> to unlock the
+                Gold Focus Badge.
+              </Text>
+            </View>
+          ) : null}
 
           <LinearGradient
             colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']}
