@@ -17,6 +17,7 @@ import Svg, {
 } from 'react-native-svg';
 import {
   AnalyticsIcon,
+  PauseIcon,
   PlayIcon,
   SettingsIcon,
   TagIcon,
@@ -26,6 +27,7 @@ import { BRAND } from '../utils/brand';
 const PURPLE = '#7F5AF0';
 const PINK = '#C084FC';
 const ORANGE = '#FF8A5B';
+const FOCUS_DURATION_SECONDS = 25 * 60;
 
 const RING_PX = 248;
 const RADIUS = 46;
@@ -45,8 +47,36 @@ export default function HomeScreen({
   onProfilePress,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const [remainingSeconds, setRemainingSeconds] = React.useState(FOCUS_DURATION_SECONDS);
+  const [isRunning, setIsRunning] = React.useState(false);
 
-  const dashOffset = CIRCUMFERENCE * (1 - 0.75);
+  React.useEffect(() => {
+    if (!isRunning || remainingSeconds <= 0) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      setRemainingSeconds(prev => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isRunning, remainingSeconds]);
+
+  React.useEffect(() => {
+    if (remainingSeconds === 0) {
+      setIsRunning(false);
+    }
+  }, [remainingSeconds]);
+
+  const remainingProgress = remainingSeconds / FOCUS_DURATION_SECONDS;
+  const dashOffset = CIRCUMFERENCE * (1 - remainingProgress);
+  const minutes = Math.floor(remainingSeconds / 60)
+    .toString()
+    .padStart(2, '0');
+  const seconds = (remainingSeconds % 60).toString().padStart(2, '0');
+  const timeLabel = `${minutes}:${seconds}`;
 
   return (
     <View style={s.root}>
@@ -123,7 +153,7 @@ export default function HomeScreen({
             </Svg>
 
             <View style={s.timerInner}>
-              <Text style={s.timerTime}>25:00</Text>
+              <Text style={s.timerTime}>{timeLabel}</Text>
               <Text style={s.timerMode}>FOCUS</Text>
             </View>
           </View>
@@ -149,14 +179,25 @@ export default function HomeScreen({
           </View>
         </View>
 
-        <TouchableOpacity activeOpacity={0.85}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            if (remainingSeconds === 0) {
+              setRemainingSeconds(FOCUS_DURATION_SECONDS);
+              setIsRunning(true);
+              return;
+            }
+
+            setIsRunning(prev => !prev);
+          }}
+        >
           <LinearGradient
             colors={[PURPLE, PINK, ORANGE]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={s.playBtn}
           >
-            <PlayIcon size={48} color="#fff" />
+            {isRunning ? <PauseIcon size={44} color="#fff" /> : <PlayIcon size={48} color="#fff" />}
           </LinearGradient>
         </TouchableOpacity>
       </View>
