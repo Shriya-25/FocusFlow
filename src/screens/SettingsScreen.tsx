@@ -14,6 +14,7 @@ import { BRAND } from '../utils/brand';
 
 type Props = {
   onBack?: () => void;
+  onAboutPomodoroPress?: () => void;
 };
 
 type ToggleRowProps = {
@@ -24,6 +25,7 @@ type ToggleRowProps = {
 
 type SupportRowProps = {
   label: string;
+  onPress?: () => void;
 };
 
 function ToggleRow({ label, value, onToggle }: ToggleRowProps) {
@@ -37,16 +39,16 @@ function ToggleRow({ label, value, onToggle }: ToggleRowProps) {
   );
 }
 
-function SupportRow({ label }: SupportRowProps) {
+function SupportRow({ label, onPress }: SupportRowProps) {
   return (
-    <Pressable style={s.supportRow} android_ripple={{ color: 'rgba(255,255,255,0.08)' }}>
+    <Pressable style={s.supportRow} android_ripple={{ color: 'rgba(255,255,255,0.08)' }} onPress={onPress}>
       <Text style={s.supportLabel}>{label}</Text>
       <Text style={s.chevron}>›</Text>
     </Pressable>
   );
 }
 
-export default function SettingsScreen({ onBack }: Props) {
+export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) {
   const insets = useSafeAreaInsets();
 
   const [timerSound, setTimerSound] = React.useState(true);
@@ -159,7 +161,7 @@ export default function SettingsScreen({ onBack }: Props) {
           <View style={s.glassCardNoPad}>
             <SupportRow label="Contact us" />
             <View style={s.rowDivider} />
-            <SupportRow label="What is Pomodoro" />
+            <SupportRow label="What is Pomodoro" onPress={onAboutPomodoroPress} />
             <View style={s.rowDivider} />
             <SupportRow label="Leave a review" />
           </View>

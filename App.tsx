@@ -11,8 +11,9 @@ import GmailLoginScreen from './src/screens/GmailLoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen.tsx';
+import AboutPomodoroScreen from './src/screens/AboutPomodoroScreen.tsx';
 
-type Screen = 'onboarding' | 'gmail-login' | 'home' | 'profile' | 'settings';
+type Screen = 'onboarding' | 'gmail-login' | 'home' | 'profile' | 'settings' | 'about-pomodoro';
 
 function App() {
   const [screen, setScreen] = React.useState<Screen>('onboarding');
@@ -73,7 +74,12 @@ function App() {
           onBack={() => setScreen('home')}
         />
       ) : screen === 'settings' ? (
-        <SettingsScreen onBack={() => setScreen('home')} />
+        <SettingsScreen
+          onBack={() => setScreen('home')}
+          onAboutPomodoroPress={() => setScreen('about-pomodoro')}
+        />
+      ) : screen === 'about-pomodoro' ? (
+        <AboutPomodoroScreen onBack={() => setScreen('settings')} />
       ) : (
         <HomeScreen
           userName={userName}
