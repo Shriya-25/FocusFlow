@@ -9,6 +9,7 @@ import {
   Modal,
   Pressable,
   TextInput,
+  FlatList,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -36,19 +37,21 @@ const FOCUS_DURATION_SECONDS = 25 * 60;
 const RING_PX = 248;
 const RADIUS = 46;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const TAG_STORAGE_KEY = 'focusflow.customTags';
+const TAG_STORAGE_KEY = 'focusflow.tags';
 const SELECTED_TAG_STORAGE_KEY = 'focusflow.selectedTag';
+const MAX_TAGS = 12;
 
 type Tag = {
+  id: string;
+  name: string;
   emoji: string;
-  label: string;
 };
 
 const PRESET_TAGS: Tag[] = [
-  { emoji: '📚', label: 'Study' },
-  { emoji: '💻', label: 'Work' },
-  { emoji: '📖', label: 'Reading' },
-  { emoji: '🧘', label: 'Meditation' },
+  { id: 'study', name: 'Study', emoji: '📚' },
+  { id: 'work', name: 'Work', emoji: '💻' },
+  { id: 'reading', name: 'Reading', emoji: '📖' },
+  { id: 'meditation', name: 'Meditation', emoji: '🧘' },
 ];
 
 const EMOJI_SUGGESTIONS = ['😴', '💼', '🏋️', '🎧', '🧠', '✍️'];
@@ -71,13 +74,14 @@ export default function HomeScreen({
   const insets = useSafeAreaInsets();
   const [remainingSeconds, setRemainingSeconds] = React.useState(FOCUS_DURATION_SECONDS);
   const [isRunning, setIsRunning] = React.useState(false);
-  const [selectedTag, setSelectedTag] = React.useState<Tag | null>(null);
-  const [customTags, setCustomTags] = React.useState<Tag[]>([]);
+  const [tags, setTags] = React.useState<Tag[]>(PRESET_TAGS);
+  const [selectedTag, setSelectedTag] = React.useState<Tag | null>(PRESET_TAGS[0]);
   const [isTagModalVisible, setIsTagModalVisible] = React.useState(false);
-  const [draftTag, setDraftTag] = React.useState<Tag | null>(null);
+  const [draftSelectedTagId, setDraftSelectedTagId] = React.useState<string | null>(PRESET_TAGS[0].id);
   const [showCustomTagInput, setShowCustomTagInput] = React.useState(false);
   const [customTagName, setCustomTagName] = React.useState('');
   const [customTagEmoji, setCustomTagEmoji] = React.useState('✨');
+  const [tagLimitMessage, setTagLimitMessage] = React.useState('');
 
   React.useEffect(() => {
     if (!isRunning || remainingSeconds <= 0) {
@@ -100,37 +104,51 @@ export default function HomeScreen({
   }, [remainingSeconds]);
 
   React.useEffect(() => {
-    const hydrateTags = async () => {
+    const hydrateTagsAndSelection = async () => {
       try {
-        const [storedCustomTags, storedSelectedTag] = await Promise.all([
+        const [storedTags, storedSelectedTag] = await Promise.all([
           AsyncStorage.getItem(TAG_STORAGE_KEY),
           AsyncStorage.getItem(SELECTED_TAG_STORAGE_KEY),
         ]);
 
-        if (storedCustomTags) {
-          const parsedTags = JSON.parse(storedCustomTags) as Tag[];
-          if (Array.isArray(parsedTags)) {
-            setCustomTags(parsedTags.filter(tag => typeof tag?.label === 'string' && typeof tag?.emoji === 'string'));
+        if (storedTags) {
+          const parsedTags = JSON.parse(storedTags) as Tag[];
+          if (Array.isArray(parsedTags) && parsedTags.length > 0) {
+            const validTags = parsedTags
+              .filter(
+                tag =>
+                  typeof tag?.id === 'string' &&
+                  typeof tag?.name === 'string' &&
+                  typeof tag?.emoji === 'string',
+              )
+              .slice(0, MAX_TAGS);
+
+            if (validTags.length > 0) {
+              setTags(validTags);
+            }
           }
         }
 
         if (storedSelectedTag) {
           const parsedSelectedTag = JSON.parse(storedSelectedTag) as Tag;
-          if (parsedSelectedTag?.label && parsedSelectedTag?.emoji) {
+          if (parsedSelectedTag?.id && parsedSelectedTag?.name && parsedSelectedTag?.emoji) {
             setSelectedTag(parsedSelectedTag);
+            setDraftSelectedTagId(parsedSelectedTag.id);
           }
         }
       } catch {
-        setCustomTags([]);
+        setTags(PRESET_TAGS);
+        setSelectedTag(PRESET_TAGS[0]);
+        setDraftSelectedTagId(PRESET_TAGS[0].id);
       }
     };
 
-    hydrateTags();
+    hydrateTagsAndSelection();
   }, []);
 
   React.useEffect(() => {
-    AsyncStorage.setItem(TAG_STORAGE_KEY, JSON.stringify(customTags)).catch(() => undefined);
-  }, [customTags]);
+    AsyncStorage.setItem(TAG_STORAGE_KEY, JSON.stringify(tags)).catch(() => undefined);
+  }, [tags]);
 
   React.useEffect(() => {
     AsyncStorage.setItem(SELECTED_TAG_STORAGE_KEY, JSON.stringify(selectedTag)).catch(() => undefined);
@@ -143,48 +161,72 @@ export default function HomeScreen({
     .padStart(2, '0');
   const seconds = (remainingSeconds % 60).toString().padStart(2, '0');
   const timeLabel = `${minutes}:${seconds}`;
-  const allTags = React.useMemo(() => [...PRESET_TAGS, ...customTags], [customTags]);
 
-  const openTagModal = () => {
-    setDraftTag(selectedTag);
+  const closeTagModal = () => {
+    setIsTagModalVisible(false);
     setShowCustomTagInput(false);
     setCustomTagName('');
     setCustomTagEmoji('✨');
+    setTagLimitMessage('');
+  };
+
+  const openTagModal = () => {
+    setDraftSelectedTagId(selectedTag?.id ?? PRESET_TAGS[0].id);
+    setShowCustomTagInput(false);
+    setCustomTagName('');
+    setCustomTagEmoji('✨');
+    setTagLimitMessage('');
     setIsTagModalVisible(true);
   };
 
-  const handleSaveTag = () => {
-    const customName = customTagName.trim();
-    const customEmoji = customTagEmoji.trim() || '✨';
+  const handleDeleteTag = (tagId: string) => {
+    const nextTags = tags.filter(tag => tag.id !== tagId);
+    setTags(nextTags);
 
-    if (customName.length > 0) {
-      const normalizedName = customName.replace(/\s+/g, ' ');
-      const newTag = {
-        emoji: customEmoji,
-        label: normalizedName,
+    if (draftSelectedTagId === tagId) {
+      setDraftSelectedTagId(PRESET_TAGS[0].id);
+    }
+
+    if (selectedTag?.id === tagId) {
+      setSelectedTag(PRESET_TAGS[0]);
+    }
+  };
+
+  const handleSaveTag = () => {
+    const normalizedName = customTagName.trim().replace(/\s+/g, ' ');
+    const normalizedEmoji = customTagEmoji.trim() || '✨';
+
+    if (normalizedName.length > 0) {
+      const existingTag = tags.find(tag => tag.name.toLowerCase() === normalizedName.toLowerCase());
+
+      if (!existingTag && tags.length >= MAX_TAGS) {
+        setTagLimitMessage('You have reached the maximum tag limit (12). Delete an existing tag to create a new one.');
+        return;
+      }
+
+      const newTagId = normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const createdTag: Tag = {
+        id: existingTag?.id ?? `${newTagId || 'tag'}-${Date.now()}`,
+        name: normalizedName,
+        emoji: normalizedEmoji,
       };
 
-      setCustomTags(prev => {
-        const existingIndex = prev.findIndex(tag => tag.label.toLowerCase() === normalizedName.toLowerCase());
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = newTag;
-          return updated;
+      setTags(prev => {
+        if (existingTag) {
+          return prev.map(tag => (tag.id === existingTag.id ? createdTag : tag));
         }
 
-        return [...prev, newTag];
+        return [...prev, createdTag];
       });
 
-      setSelectedTag({
-        emoji: customEmoji,
-        label: customName,
-      });
-      setIsTagModalVisible(false);
+      setSelectedTag(createdTag);
+      closeTagModal();
       return;
     }
 
-    setSelectedTag(draftTag);
-    setIsTagModalVisible(false);
+    const pickedTag = tags.find(tag => tag.id === draftSelectedTagId) ?? PRESET_TAGS[0];
+    setSelectedTag(pickedTag);
+    closeTagModal();
   };
 
   return (
@@ -270,7 +312,7 @@ export default function HomeScreen({
 
         <Pressable style={s.tagPill} onPress={openTagModal}>
           {selectedTag ? <Text style={s.tagEmojiText}>{selectedTag.emoji}</Text> : <TagIcon size={14} color={PINK} />}
-          <Text style={s.tagText}>{selectedTag ? selectedTag.label : 'Select Tag'}</Text>
+          <Text style={s.tagText}>{selectedTag ? selectedTag.name : 'Select Tag'}</Text>
         </Pressable>
 
         <View style={s.goalSection}>
@@ -315,41 +357,64 @@ export default function HomeScreen({
         visible={isTagModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setIsTagModalVisible(false)}
+        onRequestClose={closeTagModal}
       >
         <View style={s.modalRoot}>
-          <Pressable style={s.modalBackdrop} onPress={() => setIsTagModalVisible(false)} />
+          <Pressable style={s.modalBackdrop} onPress={closeTagModal} />
 
           <View style={s.modalCard}>
             <View style={s.modalHandle} />
 
-            <Text style={s.modalTitle}>Add a Tag / Select a Tag</Text>
+            <Text style={s.modalTitle}>Add or Select Tag</Text>
             <Text style={s.modalSubtitle}>What are you focusing on?</Text>
 
-            <View style={s.tagsGrid}>
-              {allTags.map(tag => {
-                const isSelected = draftTag?.label === tag.label;
+            <View style={s.tagsListWrap}>
+              <FlatList
+                data={tags}
+                keyExtractor={item => item.id}
+                numColumns={2}
+                showsVerticalScrollIndicator={false}
+                columnWrapperStyle={s.tagsRow}
+                contentContainerStyle={s.tagsListContent}
+                renderItem={({ item }) => {
+                  const isSelected = draftSelectedTagId === item.id;
 
-                return (
-                  <TouchableOpacity
-                    key={tag.label}
-                    style={isSelected ? s.tagChipSelectedWrap : s.tagChipWrap}
-                    activeOpacity={0.85}
-                    onPress={() => setDraftTag(tag)}
-                  >
-                    <View style={isSelected ? s.tagChipSelectedInner : s.tagChip}>
-                      <Text style={s.tagChipEmoji}>{tag.emoji}</Text>
-                      <Text style={s.tagChipText}>{tag.label}</Text>
+                  return (
+                    <View style={s.tagGridItem}>
+                      <Pressable
+                        style={isSelected ? s.tagChipSelectedWrap : s.tagChipWrap}
+                        onPress={() => setDraftSelectedTagId(item.id)}
+                        android_ripple={{ color: 'rgba(255,255,255,0.08)' }}
+                      >
+                        <View style={isSelected ? s.tagChipSelectedInner : s.tagChip}>
+                          <View style={s.tagChipMain}>
+                            <Text style={s.tagChipEmoji}>{item.emoji}</Text>
+                            <Text style={s.tagChipText} numberOfLines={1}>{item.name}</Text>
+                          </View>
+
+                          <TouchableOpacity
+                            onPress={() => handleDeleteTag(item.id)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            style={s.deleteTagButton}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={s.deleteTagText}>×</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </Pressable>
                     </View>
-                  </TouchableOpacity>
-                );
-              })}
+                  );
+                }}
+              />
             </View>
 
             <TouchableOpacity
               style={s.addCustomButton}
               activeOpacity={0.85}
-              onPress={() => setShowCustomTagInput(prev => !prev)}
+              onPress={() => {
+                setTagLimitMessage('');
+                setShowCustomTagInput(prev => !prev);
+              }}
             >
               <Text style={s.addCustomText}>+ Add Custom Tag</Text>
             </TouchableOpacity>
@@ -358,7 +423,10 @@ export default function HomeScreen({
               <View style={s.customInputsWrap}>
                 <TextInput
                   value={customTagName}
-                  onChangeText={setCustomTagName}
+                  onChangeText={text => {
+                    setCustomTagName(text);
+                    setTagLimitMessage('');
+                  }}
                   placeholder="Enter tag name"
                   placeholderTextColor="rgba(255,255,255,0.45)"
                   style={s.customInput}
@@ -389,11 +457,13 @@ export default function HomeScreen({
               </View>
             ) : null}
 
+            {tagLimitMessage ? <Text style={s.limitMessage}>{tagLimitMessage}</Text> : null}
+
             <View style={s.modalActions}>
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={s.cancelButton}
-                onPress={() => setIsTagModalVisible(false)}
+                onPress={closeTagModal}
               >
                 <Text style={s.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -521,6 +591,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 9,
     minWidth: 136,
+    minHeight: 46,
     borderRadius: 9999,
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
@@ -582,6 +653,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 18,
+    maxHeight: '82%',
     backgroundColor: 'rgba(30, 15, 60, 0.9)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
@@ -607,18 +679,23 @@ const s = StyleSheet.create({
     fontSize: 13,
     marginBottom: 14,
   },
-  tagsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  tagsListWrap: {
+    maxHeight: 280,
+  },
+  tagsListContent: {
+    paddingBottom: 4,
+  },
+  tagsRow: {
     gap: 10,
-    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  tagGridItem: {
+    flex: 1,
   },
   tagChipWrap: {
-    width: '48.6%',
     borderRadius: 14,
   },
   tagChipSelectedWrap: {
-    width: '48.6%',
     borderRadius: 14,
     padding: 1,
     backgroundColor: 'rgba(129, 92, 240, 0.92)',
@@ -631,8 +708,9 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     gap: 8,
+    paddingHorizontal: 10,
   },
   tagChipSelectedInner: {
     minHeight: 44,
@@ -642,16 +720,38 @@ const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     gap: 8,
+    paddingHorizontal: 10,
+  },
+  tagChipMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   tagChipEmoji: {
     fontSize: 16,
   },
   tagChipText: {
+    flex: 1,
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  deleteTagButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  deleteTagText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 18,
+    lineHeight: 18,
+    fontWeight: '700',
   },
   addCustomButton: {
     marginTop: 14,
@@ -713,6 +813,13 @@ const s = StyleSheet.create({
   },
   emojiOptionText: {
     fontSize: 18,
+  },
+  limitMessage: {
+    marginTop: 10,
+    color: '#FFB190',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
   },
   modalActions: {
     marginTop: 16,
