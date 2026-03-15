@@ -6,10 +6,12 @@ import {
   ScrollView,
   Pressable,
   StatusBar,
+  TouchableOpacity,
+  Linking,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BackIcon } from '../components/Icons/AppIcons';
+import { BackIcon, EmailIcon, GlobeIcon, InstagramIcon } from '../components/Icons/AppIcons';
 import { BRAND } from '../utils/brand';
 
 type Props = {
@@ -54,6 +56,15 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
   const [timerSound, setTimerSound] = React.useState(true);
   const [notifications, setNotifications] = React.useState(true);
   const [darkMode, setDarkMode] = React.useState(true);
+  const [isContactExpanded, setIsContactExpanded] = React.useState(false);
+
+  const openExternalLink = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // Silent fail for dummy links.
+    }
+  };
 
   return (
     <View style={s.root}>
@@ -159,7 +170,48 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
         <View style={s.sectionBlock}>
           <Text style={s.sectionTitle}>SUPPORT</Text>
           <View style={s.glassCardNoPad}>
-            <SupportRow label="Contact us" />
+            <Pressable
+              style={s.supportRow}
+              android_ripple={{ color: 'rgba(255,255,255,0.08)' }}
+              onPress={() => setIsContactExpanded(prev => !prev)}
+            >
+              <Text style={s.supportLabel}>Contact us</Text>
+              <Text style={s.chevron}>{isContactExpanded ? '⌃' : '⌄'}</Text>
+            </Pressable>
+
+            {isContactExpanded ? (
+              <View style={s.contactAccordionBody}>
+                <View style={s.contactIconsRow}>
+                  <TouchableOpacity
+                    style={s.contactIconButton}
+                    activeOpacity={0.8}
+                    onPress={() => openExternalLink('https://instagram.com')}
+                  >
+                    <InstagramIcon size={26} color="#FFB190" />
+                    <Text style={s.contactIconLabel}>Instagram</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={s.contactIconButton}
+                    activeOpacity={0.8}
+                    onPress={() => openExternalLink('https://google.com')}
+                  >
+                    <GlobeIcon size={26} color="#C084FC" />
+                    <Text style={s.contactIconLabel}>Website</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={s.contactIconButton}
+                    activeOpacity={0.8}
+                    onPress={() => openExternalLink('mailto:example@email.com')}
+                  >
+                    <EmailIcon size={26} color="#B497FF" />
+                    <Text style={s.contactIconLabel}>Email</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+
             <View style={s.rowDivider} />
             <SupportRow label="What is Pomodoro" onPress={onAboutPomodoroPress} />
             <View style={s.rowDivider} />
@@ -337,6 +389,32 @@ const s = StyleSheet.create({
     height: 1,
     marginHorizontal: 16,
     backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  contactAccordionBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+  },
+  contactIconsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  contactIconButton: {
+    flex: 1,
+    minHeight: 74,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 8,
+  },
+  contactIconLabel: {
+    marginTop: 6,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 11,
+    fontWeight: '600',
   },
 
   versionLabel: {

@@ -100,3 +100,49 @@ export function TagIcon({ size = 14, color = '#C084FC', strokeWidth = 1.8 }: Ico
     </Svg>
   );
 }
+
+export function InstagramIcon({ size = 26, color = '#FFB190', strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="4" y="4" width="16" height="16" rx="5" stroke={color} strokeWidth={strokeWidth} />
+      <Circle cx="12" cy="12" r="3.5" stroke={color} strokeWidth={strokeWidth} />
+      <Circle cx="16.8" cy="7.3" r="1" fill={color} />
+    </Svg>
+  );
+}
+
+export function GlobeIcon({ size = 26, color = '#C084FC', strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="8.5" stroke={color} strokeWidth={strokeWidth} />
+      <Path d="M3.8 12H20.2" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Path
+        d="M12 3.7C14.4 6.2 15.7 9 15.7 12C15.7 15 14.4 17.8 12 20.3"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M12 3.7C9.6 6.2 8.3 9 8.3 12C8.3 15 9.6 17.8 12 20.3"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+export function EmailIcon({ size = 26, color = '#B497FF', strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="3.5" y="6.5" width="17" height="11" rx="2.2" stroke={color} strokeWidth={strokeWidth} />
+      <Path
+        d="M4.6 8L12 13.2L19.4 8"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
