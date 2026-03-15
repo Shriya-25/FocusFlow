@@ -15,7 +15,12 @@ import Svg, {
   LinearGradient as SvgGradient,
   Stop,
 } from 'react-native-svg';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import {
+  AnalyticsIcon,
+  PlayIcon,
+  SettingsIcon,
+  TagIcon,
+} from '../components/Icons/AppIcons';
 import { BRAND } from '../utils/brand';
 
 const PURPLE = '#7F5AF0';
@@ -70,10 +75,10 @@ export default function HomeScreen({
 
         <View style={s.headerButtons}>
           <TouchableOpacity style={s.iconBtn} activeOpacity={0.75}>
-            <MaterialCommunityIcons name="chart-bar" size={22} color="#fff" />
+            <AnalyticsIcon size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={s.iconBtn} activeOpacity={0.75}>
-            <MaterialCommunityIcons name="cog" size={22} color="#fff" />
+            <SettingsIcon size={20} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
@@ -125,7 +130,7 @@ export default function HomeScreen({
         </View>
 
         <View style={s.tagPill}>
-          <MaterialCommunityIcons name="label" size={14} color={PINK} />
+          <TagIcon size={14} color={PINK} />
           <Text style={s.tagText}>Study</Text>
         </View>
 
@@ -151,7 +156,7 @@ export default function HomeScreen({
             end={{ x: 1, y: 0 }}
             style={s.playBtn}
           >
-            <MaterialCommunityIcons name="play" size={52} color="#fff" style={s.playIcon} />
+            <PlayIcon size={48} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -304,8 +309,5 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 20,
-  },
-  playIcon: {
-    marginLeft: 4,
   },
 });

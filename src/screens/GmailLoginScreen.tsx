@@ -32,8 +32,8 @@ const GmailLoginScreen: React.FC<GmailLoginScreenProps> = ({
         style={StyleSheet.absoluteFillObject}
       />
 
-      <View style={styles.blurCircleTop} />
-      <View style={styles.blurCircleBottom} />
+      <View style={styles.blurCircleTop} pointerEvents="none" />
+      <View style={styles.blurCircleBottom} pointerEvents="none" />
 
       <View style={[styles.content, { paddingTop: Math.max(insets.top, 10) + 24 }]}>
         <View style={styles.logoWrap}>
@@ -44,7 +44,7 @@ const GmailLoginScreen: React.FC<GmailLoginScreenProps> = ({
         </View>
 
         <View style={styles.card}>
-          <View style={styles.cardGlow} />
+          <View style={styles.cardGlow} pointerEvents="none" />
 
           <Text style={styles.welcomeTitle}>Welcome back</Text>
           <Text style={styles.welcomeSubtitle}>
@@ -54,19 +54,19 @@ const GmailLoginScreen: React.FC<GmailLoginScreenProps> = ({
           <TouchableOpacity
             activeOpacity={0.9}
             style={styles.googleButton}
-            onPress={onGoogleLogin}
+            onPress={() => onGoogleLogin?.()}
           >
             <Text style={styles.googleG}>G</Text>
             <Text style={styles.googleLabel}>Continue with Google</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity activeOpacity={0.8} onPress={onSkip}>
-            <Text style={styles.skipText}>Skip for now</Text>
+          <TouchableOpacity activeOpacity={0.8} onPress={() => onSkip?.()}>
+            <Text style={styles.skipText}>Skip Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.bottomFade} />
+      <View style={styles.bottomFade} pointerEvents="none" />
     </View>
   );
 };

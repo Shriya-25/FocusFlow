@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,11 @@ import {
   Pressable,
   ScrollView,
   Image,
-  Modal,
   StatusBar,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { BackIcon, CrownIcon, InfoIcon } from '../components/Icons/AppIcons';
 import { BRAND } from '../utils/brand';
 
 const PURPLE = BRAND.violet;
@@ -20,13 +19,11 @@ const ORANGE = BRAND.peach;
 
 const TOTAL_REQUIRED_POMODOROS = 300;
 const COMPLETED_POMODOROS = 12;
-const AVATARS = ['🐼', '🦁', '🐰', '🐶', '🐵', '🤖', '🦋', '🌙', '⭐'];
 
 type Props = {
   userName?: string;
   userPhoto?: string | null;
   selectedAvatar?: string;
-  onAvatarChange?: (avatar: string) => void;
   onBack?: () => void;
 };
 
@@ -34,36 +31,15 @@ export default function ProfileScreen({
   userName = 'Shriya',
   userPhoto,
   selectedAvatar = '🦁',
-  onAvatarChange,
   onBack,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [avatarModalVisible, setAvatarModalVisible] = useState(false);
-  const [pendingAvatar, setPendingAvatar] = useState(selectedAvatar);
-
-  useEffect(() => {
-    setPendingAvatar(selectedAvatar);
-  }, [selectedAvatar]);
 
   const progressPercent = useMemo(
     () => Math.round((COMPLETED_POMODOROS / TOTAL_REQUIRED_POMODOROS) * 100),
     [],
   );
   const remainingPomodoros = TOTAL_REQUIRED_POMODOROS - COMPLETED_POMODOROS;
-
-  const openAvatarModal = () => {
-    setPendingAvatar(selectedAvatar);
-    setAvatarModalVisible(true);
-  };
-
-  const closeAvatarModal = () => {
-    setAvatarModalVisible(false);
-  };
-
-  const confirmAvatar = () => {
-    onAvatarChange?.(pendingAvatar);
-    setAvatarModalVisible(false);
-  };
 
   return (
     <View style={s.root}>
@@ -85,7 +61,7 @@ export default function ProfileScreen({
             onPress={onBack}
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
+            <BackIcon size={22} color="#fff" />
           </Pressable>
         </View>
 
@@ -98,14 +74,6 @@ export default function ProfileScreen({
                 <Text style={s.profileAvatarEmoji}>{selectedAvatar}</Text>
               </View>
             )}
-
-            <Pressable
-              onPress={openAvatarModal}
-              style={s.avatarEditButton}
-              android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-            >
-              <MaterialCommunityIcons name="pencil" size={14} color="#fff" />
-            </Pressable>
           </View>
 
           <Text style={s.userName}>{userName}</Text>
@@ -130,7 +98,7 @@ export default function ProfileScreen({
               <Text style={s.badgeSubtitle}>{COMPLETED_POMODOROS} Pomodoros Completed</Text>
             </View>
             <View style={s.badgeIconWrap}>
-              <MaterialCommunityIcons name="crown" size={28} color={ORANGE} />
+              <CrownIcon size={26} color={ORANGE} />
             </View>
           </View>
 
@@ -148,11 +116,7 @@ export default function ProfileScreen({
           </View>
 
           <View style={s.infoRow}>
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={16}
-              color="rgba(255,255,255,0.6)"
-            />
+            <InfoIcon size={16} color="rgba(255,255,255,0.6)" />
             <Text style={s.infoText}>
               Complete <Text style={s.infoTextStrong}>{remainingPomodoros} more Pomodoros</Text> to unlock the
               Gold Focus Badge.
@@ -171,61 +135,6 @@ export default function ProfileScreen({
 
         <View style={s.bottomPad} />
       </ScrollView>
-
-      <Modal
-        visible={avatarModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeAvatarModal}
-      >
-        <View style={s.modalRoot}>
-          <Pressable style={s.modalBackdrop} onPress={closeAvatarModal} />
-
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Choose Your Avatar</Text>
-            <Text style={s.modalSubtitle}>Select a character for your profile</Text>
-
-            <View style={s.avatarGrid}>
-              {AVATARS.map(avatar => {
-                const selected = pendingAvatar === avatar;
-                return (
-                  <Pressable
-                    key={avatar}
-                    onPress={() => setPendingAvatar(avatar)}
-                    style={[s.avatarOption, selected ? s.avatarOptionSelected : s.avatarOptionDefault]}
-                    android_ripple={{ color: 'rgba(255,255,255,0.16)', radius: 32 }}
-                  >
-                    <Text style={s.avatarOptionText}>{avatar}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Pressable
-              style={s.selectButtonWrap}
-              onPress={confirmAvatar}
-              android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-            >
-              <LinearGradient
-                colors={[PURPLE, PINK, ORANGE]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={s.selectButton}
-              >
-                <Text style={s.selectButtonText}>Select Avatar</Text>
-              </LinearGradient>
-            </Pressable>
-
-            <Pressable
-              style={s.cancelButton}
-              onPress={closeAvatarModal}
-              android_ripple={{ color: 'rgba(255,255,255,0.08)' }}
-            >
-              <Text style={s.cancelButtonText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -292,19 +201,6 @@ const s = StyleSheet.create({
   },
   profileAvatarEmoji: {
     fontSize: 56,
-  },
-  avatarEditButton: {
-    position: 'absolute',
-    right: -2,
-    bottom: 6,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ec5b13',
-    borderWidth: 2,
-    borderColor: '#2a1c4d',
   },
   userName: {
     marginTop: 16,
@@ -458,100 +354,5 @@ const s = StyleSheet.create({
 
   bottomPad: {
     height: 24,
-  },
-
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(9, 7, 20, 0.72)',
-  },
-  modalCard: {
-    borderRadius: 36,
-    paddingHorizontal: 22,
-    paddingVertical: 24,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-  },
-  modalTitle: {
-    color: '#fff',
-    textAlign: 'center',
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  modalSubtitle: {
-    marginTop: 4,
-    color: 'rgba(255,255,255,0.62)',
-    textAlign: 'center',
-    fontSize: 14,
-  },
-
-  avatarGrid: {
-    marginTop: 22,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 14,
-  },
-  avatarOption: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarOptionDefault: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-  },
-  avatarOptionSelected: {
-    backgroundColor: 'rgba(127,90,240,0.26)',
-    borderWidth: 2,
-    borderColor: 'rgba(192,132,252,0.95)',
-    shadowColor: '#c084fc',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.65,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  avatarOptionText: {
-    fontSize: 32,
-  },
-
-  selectButtonWrap: {
-    marginTop: 22,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  selectButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  selectButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  cancelButton: {
-    marginTop: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 999,
-  },
-  cancelButtonText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
   },
 });
