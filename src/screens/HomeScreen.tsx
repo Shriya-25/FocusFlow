@@ -6,7 +6,11 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
+  Modal,
+  Pressable,
+  TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
@@ -32,6 +36,22 @@ const FOCUS_DURATION_SECONDS = 25 * 60;
 const RING_PX = 248;
 const RADIUS = 46;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const TAG_STORAGE_KEY = 'focusflow.customTags';
+const SELECTED_TAG_STORAGE_KEY = 'focusflow.selectedTag';
+
+type Tag = {
+  emoji: string;
+  label: string;
+};
+
+const PRESET_TAGS: Tag[] = [
+  { emoji: '📚', label: 'Study' },
+  { emoji: '💻', label: 'Work' },
+  { emoji: '📖', label: 'Reading' },
+  { emoji: '🧘', label: 'Meditation' },
+];
+
+const EMOJI_SUGGESTIONS = ['😴', '💼', '🏋️', '🎧', '🧠', '✍️'];
 
 type Props = {
   userName?: string;
@@ -51,6 +71,13 @@ export default function HomeScreen({
   const insets = useSafeAreaInsets();
   const [remainingSeconds, setRemainingSeconds] = React.useState(FOCUS_DURATION_SECONDS);
   const [isRunning, setIsRunning] = React.useState(false);
+  const [selectedTag, setSelectedTag] = React.useState<Tag | null>(null);
+  const [customTags, setCustomTags] = React.useState<Tag[]>([]);
+  const [isTagModalVisible, setIsTagModalVisible] = React.useState(false);
+  const [draftTag, setDraftTag] = React.useState<Tag | null>(null);
+  const [showCustomTagInput, setShowCustomTagInput] = React.useState(false);
+  const [customTagName, setCustomTagName] = React.useState('');
+  const [customTagEmoji, setCustomTagEmoji] = React.useState('✨');
 
   React.useEffect(() => {
     if (!isRunning || remainingSeconds <= 0) {
@@ -72,6 +99,43 @@ export default function HomeScreen({
     }
   }, [remainingSeconds]);
 
+  React.useEffect(() => {
+    const hydrateTags = async () => {
+      try {
+        const [storedCustomTags, storedSelectedTag] = await Promise.all([
+          AsyncStorage.getItem(TAG_STORAGE_KEY),
+          AsyncStorage.getItem(SELECTED_TAG_STORAGE_KEY),
+        ]);
+
+        if (storedCustomTags) {
+          const parsedTags = JSON.parse(storedCustomTags) as Tag[];
+          if (Array.isArray(parsedTags)) {
+            setCustomTags(parsedTags.filter(tag => typeof tag?.label === 'string' && typeof tag?.emoji === 'string'));
+          }
+        }
+
+        if (storedSelectedTag) {
+          const parsedSelectedTag = JSON.parse(storedSelectedTag) as Tag;
+          if (parsedSelectedTag?.label && parsedSelectedTag?.emoji) {
+            setSelectedTag(parsedSelectedTag);
+          }
+        }
+      } catch {
+        setCustomTags([]);
+      }
+    };
+
+    hydrateTags();
+  }, []);
+
+  React.useEffect(() => {
+    AsyncStorage.setItem(TAG_STORAGE_KEY, JSON.stringify(customTags)).catch(() => undefined);
+  }, [customTags]);
+
+  React.useEffect(() => {
+    AsyncStorage.setItem(SELECTED_TAG_STORAGE_KEY, JSON.stringify(selectedTag)).catch(() => undefined);
+  }, [selectedTag]);
+
   const remainingProgress = remainingSeconds / FOCUS_DURATION_SECONDS;
   const dashOffset = CIRCUMFERENCE * (1 - remainingProgress);
   const minutes = Math.floor(remainingSeconds / 60)
@@ -79,6 +143,49 @@ export default function HomeScreen({
     .padStart(2, '0');
   const seconds = (remainingSeconds % 60).toString().padStart(2, '0');
   const timeLabel = `${minutes}:${seconds}`;
+  const allTags = React.useMemo(() => [...PRESET_TAGS, ...customTags], [customTags]);
+
+  const openTagModal = () => {
+    setDraftTag(selectedTag);
+    setShowCustomTagInput(false);
+    setCustomTagName('');
+    setCustomTagEmoji('✨');
+    setIsTagModalVisible(true);
+  };
+
+  const handleSaveTag = () => {
+    const customName = customTagName.trim();
+    const customEmoji = customTagEmoji.trim() || '✨';
+
+    if (customName.length > 0) {
+      const normalizedName = customName.replace(/\s+/g, ' ');
+      const newTag = {
+        emoji: customEmoji,
+        label: normalizedName,
+      };
+
+      setCustomTags(prev => {
+        const existingIndex = prev.findIndex(tag => tag.label.toLowerCase() === normalizedName.toLowerCase());
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = newTag;
+          return updated;
+        }
+
+        return [...prev, newTag];
+      });
+
+      setSelectedTag({
+        emoji: customEmoji,
+        label: customName,
+      });
+      setIsTagModalVisible(false);
+      return;
+    }
+
+    setSelectedTag(draftTag);
+    setIsTagModalVisible(false);
+  };
 
   return (
     <View style={s.root}>
@@ -161,10 +268,10 @@ export default function HomeScreen({
           </View>
         </View>
 
-        <View style={s.tagPill}>
-          <TagIcon size={14} color={PINK} />
-          <Text style={s.tagText}>Study</Text>
-        </View>
+        <Pressable style={s.tagPill} onPress={openTagModal}>
+          {selectedTag ? <Text style={s.tagEmojiText}>{selectedTag.emoji}</Text> : <TagIcon size={14} color={PINK} />}
+          <Text style={s.tagText}>{selectedTag ? selectedTag.label : 'Select Tag'}</Text>
+        </Pressable>
 
         <View style={s.goalSection}>
           <Text style={s.goalLabel}>DAILY GOAL: 3 / 5 SESSIONS</Text>
@@ -203,6 +310,108 @@ export default function HomeScreen({
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={isTagModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsTagModalVisible(false)}
+      >
+        <View style={s.modalRoot}>
+          <Pressable style={s.modalBackdrop} onPress={() => setIsTagModalVisible(false)} />
+
+          <View style={s.modalCard}>
+            <View style={s.modalHandle} />
+
+            <Text style={s.modalTitle}>Add a Tag / Select a Tag</Text>
+            <Text style={s.modalSubtitle}>What are you focusing on?</Text>
+
+            <View style={s.tagsGrid}>
+              {allTags.map(tag => {
+                const isSelected = draftTag?.label === tag.label;
+
+                return (
+                  <TouchableOpacity
+                    key={tag.label}
+                    style={isSelected ? s.tagChipSelectedWrap : s.tagChipWrap}
+                    activeOpacity={0.85}
+                    onPress={() => setDraftTag(tag)}
+                  >
+                    <View style={isSelected ? s.tagChipSelectedInner : s.tagChip}>
+                      <Text style={s.tagChipEmoji}>{tag.emoji}</Text>
+                      <Text style={s.tagChipText}>{tag.label}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={s.addCustomButton}
+              activeOpacity={0.85}
+              onPress={() => setShowCustomTagInput(prev => !prev)}
+            >
+              <Text style={s.addCustomText}>+ Add Custom Tag</Text>
+            </TouchableOpacity>
+
+            {showCustomTagInput ? (
+              <View style={s.customInputsWrap}>
+                <TextInput
+                  value={customTagName}
+                  onChangeText={setCustomTagName}
+                  placeholder="Enter tag name"
+                  placeholderTextColor="rgba(255,255,255,0.45)"
+                  style={s.customInput}
+                />
+                <TextInput
+                  value={customTagEmoji}
+                  onChangeText={setCustomTagEmoji}
+                  placeholder="Emoji"
+                  placeholderTextColor="rgba(255,255,255,0.45)"
+                  style={s.customEmojiInput}
+                  maxLength={2}
+                />
+              </View>
+            ) : null}
+
+            {showCustomTagInput ? (
+              <View style={s.emojiPickerRow}>
+                {EMOJI_SUGGESTIONS.map(emoji => (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={[s.emojiOption, customTagEmoji === emoji && s.emojiOptionActive]}
+                    activeOpacity={0.85}
+                    onPress={() => setCustomTagEmoji(emoji)}
+                  >
+                    <Text style={s.emojiOptionText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={s.cancelButton}
+                onPress={() => setIsTagModalVisible(false)}
+              >
+                <Text style={s.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.9} style={s.saveButton} onPress={handleSaveTag}>
+                <LinearGradient
+                  colors={[PURPLE, PINK, ORANGE]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={s.saveButtonGradient}
+                >
+                  <Text style={s.saveButtonText}>Save Tag</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -307,9 +516,11 @@ const s = StyleSheet.create({
   tagPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 20,
-    paddingVertical: 7,
+    paddingVertical: 9,
+    minWidth: 136,
     borderRadius: 9999,
     backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
@@ -319,6 +530,9 @@ const s = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '500',
+  },
+  tagEmojiText: {
+    fontSize: 14,
   },
 
   goalSection: {
@@ -352,5 +566,187 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 20,
+  },
+
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+  },
+  modalCard: {
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 18,
+    backgroundColor: 'rgba(30, 15, 60, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    color: '#fff',
+    textAlign: 'center',
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  tagsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  tagChipWrap: {
+    width: '48.6%',
+    borderRadius: 14,
+  },
+  tagChipSelectedWrap: {
+    width: '48.6%',
+    borderRadius: 14,
+    padding: 1,
+    backgroundColor: 'rgba(129, 92, 240, 0.92)',
+  },
+  tagChip: {
+    minHeight: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  tagChipSelectedInner: {
+    minHeight: 44,
+    borderRadius: 13,
+    backgroundColor: '#1E0F3D',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  tagChipEmoji: {
+    fontSize: 16,
+  },
+  tagChipText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addCustomButton: {
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  addCustomText: {
+    color: PURPLE,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  customInputsWrap: {
+    marginTop: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  customInput: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    color: '#fff',
+    fontSize: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.13)',
+  },
+  customEmojiInput: {
+    width: 64,
+    minHeight: 44,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    textAlign: 'center',
+    color: '#fff',
+    fontSize: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.13)',
+  },
+  emojiPickerRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  emojiOption: {
+    minWidth: 44,
+    minHeight: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  emojiOptionActive: {
+    borderColor: 'rgba(129, 92, 240, 0.95)',
+    backgroundColor: 'rgba(129, 92, 240, 0.2)',
+  },
+  emojiOptionText: {
+    fontSize: 18,
+  },
+  modalActions: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  saveButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  saveButtonGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
