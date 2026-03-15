@@ -10,8 +10,9 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import GmailLoginScreen from './src/screens/GmailLoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import SettingsScreen from './src/screens/SettingsScreen.tsx';
 
-type Screen = 'onboarding' | 'gmail-login' | 'home' | 'profile';
+type Screen = 'onboarding' | 'gmail-login' | 'home' | 'profile' | 'settings';
 
 function App() {
   const [screen, setScreen] = React.useState<Screen>('onboarding');
@@ -71,12 +72,15 @@ function App() {
           onGuestSignIn={() => handleGoogleLogin('profile')}
           onBack={() => setScreen('home')}
         />
+      ) : screen === 'settings' ? (
+        <SettingsScreen onBack={() => setScreen('home')} />
       ) : (
         <HomeScreen
           userName={userName}
           userPhoto={userPhoto}
           avatarEmoji={selectedAvatar}
           onProfilePress={() => setScreen('profile')}
+          onSettingsPress={() => setScreen('settings')}
         />
       )}
     </SafeAreaProvider>

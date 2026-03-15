@@ -38,6 +38,7 @@ type Props = {
   userPhoto?: string | null;
   avatarEmoji?: string;
   onProfilePress?: () => void;
+  onSettingsPress?: () => void;
 };
 
 export default function HomeScreen({
@@ -45,6 +46,7 @@ export default function HomeScreen({
   userPhoto,
   avatarEmoji = '🦁',
   onProfilePress,
+  onSettingsPress,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [remainingSeconds, setRemainingSeconds] = React.useState(FOCUS_DURATION_SECONDS);
@@ -107,7 +109,7 @@ export default function HomeScreen({
           <TouchableOpacity style={s.iconBtn} activeOpacity={0.75}>
             <AnalyticsIcon size={20} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={s.iconBtn} activeOpacity={0.75}>
+          <TouchableOpacity style={s.iconBtn} activeOpacity={0.75} onPress={onSettingsPress}>
             <SettingsIcon size={20} color="#fff" />
           </TouchableOpacity>
         </View>
