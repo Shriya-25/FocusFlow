@@ -34,6 +34,13 @@ import {
 import { getThemeBrand } from '../utils/brand';
 import { useSettingsStore } from '../storage/settingsStore';
 import { appendSessionHistory } from '../storage/sessionHistory';
+import {
+  DEFAULT_DAILY_GOAL,
+  incrementDailyGoalSessions,
+  readDailyGoalProgress,
+  syncDailyGoalProgress,
+} from '../storage/dailyGoal';
+import { playCompletionSound } from '../services/soundService';
 
 const PURPLE = '#7F5AF0';
 const PINK = '#C084FC';
@@ -138,11 +145,42 @@ export default function HomeScreen({
   const [customTagEmoji, setCustomTagEmoji] = React.useState('✨');
   const [tagLimitMessage, setTagLimitMessage] = React.useState('');
   const [timerRunVersion, setTimerRunVersion] = React.useState(0);
+  const [dailyGoal, setDailyGoal] = React.useState(DEFAULT_DAILY_GOAL);
+  const [sessionsCompletedToday, setSessionsCompletedToday] = React.useState(0);
   const remainingMsRef = React.useRef(remainingMs);
 
   React.useEffect(() => {
     remainingMsRef.current = remainingMs;
   }, [remainingMs]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    readDailyGoalProgress().then(progress => {
+      if (!isMounted) {
+        return;
+      }
+
+      setDailyGoal(progress.dailyGoal);
+      setSessionsCompletedToday(progress.sessionsCompletedToday);
+    });
+
+    const syncIntervalId = setInterval(() => {
+      syncDailyGoalProgress().then(progress => {
+        if (!isMounted) {
+          return;
+        }
+
+        setDailyGoal(progress.dailyGoal);
+        setSessionsCompletedToday(progress.sessionsCompletedToday);
+      });
+    }, 60 * 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(syncIntervalId);
+    };
+  }, []);
 
   const clearTimerInterval = React.useCallback(() => {
     if (intervalRef.current) {
@@ -170,6 +208,13 @@ export default function HomeScreen({
       }, isGuestUser ? 'guest' : 'account').catch(() => undefined);
 
       if (finishedSession === 'focus') {
+        incrementDailyGoalSessions()
+          .then(progress => {
+            setDailyGoal(progress.dailyGoal);
+            setSessionsCompletedToday(progress.sessionsCompletedToday);
+          })
+          .catch(() => undefined);
+
         const completedCycle = completedFocusCycles + 1;
         setCompletedFocusCycles(completedCycle);
         setLastCycleCompleted(completedCycle);
@@ -197,6 +242,7 @@ export default function HomeScreen({
     (finishedSession: SessionType) => {
       if (timerSound) {
         Vibration.vibrate(200);
+        playCompletionSound().catch(() => undefined);
       }
 
       if (!notifications) {
@@ -214,8 +260,7 @@ export default function HomeScreen({
         PushNotification.localNotification({
           title,
           message,
-          playSound: timerSound,
-          soundName: 'default',
+          playSound: false,
         });
       } catch {
         // Ignore notification errors to keep timer flow uninterrupted.
@@ -326,6 +371,8 @@ export default function HomeScreen({
 
   const remainingSeconds = Math.ceil(remainingMs / 1000);
   const remainingProgress = Math.max(0, Math.min(1, remainingMs / Math.max(1, totalDurationMs)));
+  const achievedDailyGoal = sessionsCompletedToday >= dailyGoal;
+  const visibleGoalSlots = Math.max(1, dailyGoal);
   const dashOffset = CIRCUMFERENCE * (1 - remainingProgress);
   const minutes = Math.floor(remainingSeconds / 60)
     .toString()
@@ -616,14 +663,18 @@ export default function HomeScreen({
         </Pressable>
 
         <View style={s.goalSection}>
-          <Text style={s.goalLabel}>DAILY GOAL: 3 / 5 SESSIONS</Text>
+          <Text style={s.goalLabel}>
+            {achievedDailyGoal
+              ? `DAILY GOAL ACHIEVED • ${sessionsCompletedToday} / ${dailyGoal} SESSIONS`
+              : `DAILY GOAL: ${sessionsCompletedToday} / ${dailyGoal} SESSIONS`}
+          </Text>
           <View style={s.dotsRow}>
-            {[1, 2, 3, 4, 5].map(i => (
+            {Array.from({ length: visibleGoalSlots }, (_, index) => index + 1).map(i => (
               <View
                 key={i}
                 style={[
                   s.dot,
-                  { backgroundColor: i <= 3 ? ORANGE : 'rgba(255,255,255,0.12)' },
+                  { backgroundColor: i <= sessionsCompletedToday ? ORANGE : 'rgba(255,255,255,0.12)' },
                 ]}
               />
             ))}
@@ -640,7 +691,7 @@ export default function HomeScreen({
             <RestartIcon size={20} color="#fff" />
           </TouchableOpacity>
 
-          <TouchableOpacity activeOpacity={0.85} onPress={handlePlayPause}>
+          <TouchableOpacity activeOpacity={0.85} onPress={handlePlayPause} style={s.playBtnWrap}>
             <LinearGradient
               colors={[PURPLE, PINK, ORANGE]}
               start={{ x: 0, y: 0 }}
@@ -1037,10 +1088,11 @@ const s = StyleSheet.create({
     borderRadius: 3,
   },
 
-  playBtn: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  playBtnWrap: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 12,
@@ -1049,20 +1101,29 @@ const s = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 20,
   },
+  playBtn: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 18,
   },
   sideControlBtn: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: PINK,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.22,
