@@ -33,6 +33,7 @@ import {
 } from '../components/Icons/AppIcons';
 import { getThemeBrand } from '../utils/brand';
 import { useSettingsStore } from '../storage/settingsStore';
+import { appendSessionHistory } from '../storage/sessionHistory';
 
 const PURPLE = '#7F5AF0';
 const PINK = '#C084FC';
@@ -204,6 +205,13 @@ export default function HomeScreen({
         endAtRef.current = null;
         setIsRunning(false);
 
+        appendSessionHistory({
+          sessionType,
+          durationSeconds: Math.max(1, Math.round(sessionDurationMs / 1000)),
+          tagId: sessionType === 'focus' ? (selectedTag?.id ?? null) : null,
+          tagName: sessionType === 'focus' ? (selectedTag?.name ?? null) : null,
+        }).catch(() => undefined);
+
         if (sessionType === 'focus') {
           const completedCycle = completedFocusCycles + 1;
           setCompletedFocusCycles(completedCycle);
@@ -226,7 +234,15 @@ export default function HomeScreen({
     return () => {
       clearInterval(intervalId);
     };
-  }, [isRunning, sessionType, completedFocusCycles, sessionDurationMs, notifySessionFinished]);
+  }, [
+    isRunning,
+    sessionType,
+    completedFocusCycles,
+    sessionDurationMs,
+    notifySessionFinished,
+    selectedTag?.id,
+    selectedTag?.name,
+  ]);
 
   React.useEffect(() => {
     const hydrateTagsAndSelection = async () => {

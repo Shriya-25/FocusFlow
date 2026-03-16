@@ -19,12 +19,39 @@ import Svg, {
 import { BackIcon } from '../components/Icons/AppIcons';
 import { getThemeBrand } from '../utils/brand';
 import { useSettingsStore } from '../storage/settingsStore';
+import {
+  readSessionHistory,
+  SessionHistoryEntry,
+} from '../storage/sessionHistory';
 
 type Props = {
   onBack?: () => void;
 };
 
 type HeatCell = 0 | 1 | 2 | 3 | 4;
+
+type DistributionItem = {
+  label: string;
+  percent: number;
+  seconds: number;
+  color: string;
+};
+
+type AnalyticsModel = {
+  todayFocusSeconds: number;
+  weekFocusSeconds: number;
+  todayFocusSessions: number;
+  trendValues: number[];
+  trendLabels: string[];
+  bestDayLabel: string;
+  bestDaySeconds: number;
+  avgDailySeconds: number;
+  heatmap: HeatCell[][];
+  distribution: DistributionItem[];
+  distributionTotalFocusSeconds: number;
+  ratioFocusSeconds: number;
+  ratioBreakSeconds: number;
+};
 
 const HEAT_LEVEL_COLORS = [
   'rgba(15, 23, 42, 0.8)',
@@ -34,13 +61,7 @@ const HEAT_LEVEL_COLORS = [
   '#FF8A5B',
 ] as const;
 
-const HEATMAP_GRID: HeatCell[][] = [
-  [2, 1, 0, 4, 3, 1, 3],
-  [3, 4, 0, 1, 2, 1, 2],
-  [1, 1, 3, 4, 1, 1, 2],
-  [2, 2, 0, 1, 3, 4, 2],
-  [0, 1, 0, 0, 0, 0, 1],
-];
+const DISTRIBUTION_COLORS = ['#815cf0', '#C084FC', '#FF9068', '#7ED4B5'];
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -49,11 +70,217 @@ const DONUT_STROKE = 12;
 const DONUT_RADIUS = (DONUT_SIZE - DONUT_STROKE) / 2;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 
-const DISTRIBUTION = [
-  { label: 'Coding', percent: 0.5, color: '#815cf0' },
-  { label: 'Study', percent: 0.3, color: '#C084FC' },
-  { label: 'Reading', percent: 0.2, color: '#FF9068' },
-];
+const EMPTY_ANALYTICS: AnalyticsModel = {
+  todayFocusSeconds: 0,
+  weekFocusSeconds: 0,
+  todayFocusSessions: 0,
+  trendValues: [0, 0, 0, 0, 0, 0, 0],
+  trendLabels: DAY_LABELS,
+  bestDayLabel: DAY_LABELS[0],
+  bestDaySeconds: 0,
+  avgDailySeconds: 0,
+  heatmap: [
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0],
+  ],
+  distribution: [{ label: 'No Focus Data', percent: 1, seconds: 0, color: '#815cf0' }],
+  distributionTotalFocusSeconds: 0,
+  ratioFocusSeconds: 0,
+  ratioBreakSeconds: 0,
+};
+
+const sumSeconds = (entries: SessionHistoryEntry[]) => {
+  return entries.reduce((total, entry) => total + entry.durationSeconds, 0);
+};
+
+const startOfDay = (value: Date | number) => {
+  const date = new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+};
+
+const addDays = (baseStartOfDayMs: number, offsetDays: number) => {
+  return baseStartOfDayMs + offsetDays * 24 * 60 * 60 * 1000;
+};
+
+const getWeekStartMonday = (dayStartMs: number) => {
+  const date = new Date(dayStartMs);
+  const dayIndex = date.getDay();
+  const mondayOffset = dayIndex === 0 ? -6 : 1 - dayIndex;
+  return addDays(dayStartMs, mondayOffset);
+};
+
+const formatHoursAndMinutes = (seconds: number) => {
+  const safe = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+
+  if (hours === 0) {
+    return `${minutes}m`;
+  }
+
+  return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+};
+
+const buildTrendPath = (values: number[]) => {
+  const width = 400;
+  const bottomY = 120;
+  const minY = 24;
+  const maxY = 104;
+  const divisor = Math.max(...values, 1);
+
+  const points = values.map((value, index) => {
+    const x = (index / Math.max(values.length - 1, 1)) * width;
+    const normalized = value / divisor;
+    const y = maxY - normalized * (maxY - minY);
+    return { x, y };
+  });
+
+  const linePath = points.reduce((path, point, index) => {
+    const command = `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+    return index === 0 ? `M${command}` : `${path} L${command}`;
+  }, '');
+
+  const fillPath = `${linePath} L${width},${bottomY} L0,${bottomY} Z`;
+
+  return {
+    linePath,
+    fillPath,
+  };
+};
+
+const computeAnalytics = (history: SessionHistoryEntry[]): AnalyticsModel => {
+  if (history.length === 0) {
+    return EMPTY_ANALYTICS;
+  }
+
+  const now = Date.now();
+  const todayStart = startOfDay(now);
+  const tomorrowStart = addDays(todayStart, 1);
+  const weekStart = addDays(todayStart, -6);
+
+  const focusEntries = history.filter(entry => entry.sessionType === 'focus');
+  const breakEntries = history.filter(entry => entry.sessionType !== 'focus');
+
+  const todayFocusEntries = focusEntries.filter(
+    entry => entry.completedAt >= todayStart && entry.completedAt < tomorrowStart,
+  );
+
+  const weekFocusEntries = focusEntries.filter(
+    entry => entry.completedAt >= weekStart && entry.completedAt < tomorrowStart,
+  );
+
+  const trendLabels: string[] = [];
+  const trendValues: number[] = [];
+
+  for (let index = 0; index < 7; index += 1) {
+    const dayStart = addDays(weekStart, index);
+    const dayEnd = addDays(dayStart, 1);
+    trendLabels.push(new Date(dayStart).toLocaleDateString('en-US', { weekday: 'short' }));
+
+    const daySeconds = sumSeconds(
+      weekFocusEntries.filter(entry => entry.completedAt >= dayStart && entry.completedAt < dayEnd),
+    );
+    trendValues.push(daySeconds);
+  }
+
+  const bestDayIndex = trendValues.reduce((best, value, index, arr) => {
+    return value > arr[best] ? index : best;
+  }, 0);
+
+  const heatStart = addDays(getWeekStartMonday(todayStart), -28);
+  const heatDailyValues: number[] = [];
+
+  for (let index = 0; index < 35; index += 1) {
+    const dayStart = addDays(heatStart, index);
+    const dayEnd = addDays(dayStart, 1);
+
+    const daySeconds = sumSeconds(
+      focusEntries.filter(entry => entry.completedAt >= dayStart && entry.completedAt < dayEnd),
+    );
+    heatDailyValues.push(daySeconds);
+  }
+
+  const heatMax = Math.max(...heatDailyValues, 0);
+  const heatLevels: HeatCell[] = heatDailyValues.map(value => {
+    if (value <= 0) {
+      return 0;
+    }
+
+    if (heatMax <= 0) {
+      return 1;
+    }
+
+    return Math.min(4, Math.max(1, Math.ceil((value / heatMax) * 4))) as HeatCell;
+  });
+
+  const heatmap: HeatCell[][] = [];
+  for (let row = 0; row < 5; row += 1) {
+    heatmap.push(heatLevels.slice(row * 7, row * 7 + 7));
+  }
+
+  const focusByTag = new Map<string, number>();
+  focusEntries.forEach(entry => {
+    const rawName = entry.tagName?.trim();
+    const label = rawName && rawName.length > 0 ? rawName : 'Unlabeled';
+    focusByTag.set(label, (focusByTag.get(label) ?? 0) + entry.durationSeconds);
+  });
+
+  let distribution: DistributionItem[];
+  const totalFocusSeconds = sumSeconds(focusEntries);
+
+  if (focusByTag.size === 0 || totalFocusSeconds <= 0) {
+    distribution = [{ label: 'No Focus Data', percent: 1, seconds: 0, color: '#815cf0' }];
+  } else {
+    const sorted = [...focusByTag.entries()]
+      .map(([label, seconds]) => ({ label, seconds }))
+      .sort((a, b) => b.seconds - a.seconds);
+
+    const topThree = sorted.slice(0, 3);
+    const otherSeconds = sorted.slice(3).reduce((sum, item) => sum + item.seconds, 0);
+
+    if (otherSeconds > 0) {
+      topThree.push({ label: 'Other', seconds: otherSeconds });
+    }
+
+    distribution = topThree.map((item, index) => ({
+      label: item.label,
+      seconds: item.seconds,
+      percent: item.seconds / totalFocusSeconds,
+      color: DISTRIBUTION_COLORS[index % DISTRIBUTION_COLORS.length],
+    }));
+  }
+
+  const ratioWindowStart = addDays(todayStart, -29);
+  const ratioFocusEntries = focusEntries.filter(entry => entry.completedAt >= ratioWindowStart);
+  const ratioBreakEntries = breakEntries.filter(entry => entry.completedAt >= ratioWindowStart);
+
+  let ratioFocusSeconds = sumSeconds(ratioFocusEntries);
+  let ratioBreakSeconds = sumSeconds(ratioBreakEntries);
+
+  if (ratioFocusSeconds === 0 && ratioBreakSeconds === 0) {
+    ratioFocusSeconds = totalFocusSeconds;
+    ratioBreakSeconds = sumSeconds(breakEntries);
+  }
+
+  return {
+    todayFocusSeconds: sumSeconds(todayFocusEntries),
+    weekFocusSeconds: sumSeconds(weekFocusEntries),
+    todayFocusSessions: todayFocusEntries.length,
+    trendValues,
+    trendLabels,
+    bestDayLabel: trendLabels[bestDayIndex] ?? DAY_LABELS[0],
+    bestDaySeconds: trendValues[bestDayIndex] ?? 0,
+    avgDailySeconds: sumSeconds(weekFocusEntries) / 7,
+    heatmap,
+    distribution,
+    distributionTotalFocusSeconds: totalFocusSeconds,
+    ratioFocusSeconds,
+    ratioBreakSeconds,
+  };
+};
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
@@ -64,7 +291,25 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TrendCard({ violet, peach }: { violet: string; peach: string }) {
+function TrendCard({
+  violet,
+  peach,
+  values,
+  labels,
+  bestDayLabel,
+  bestDaySeconds,
+  avgDailySeconds,
+}: {
+  violet: string;
+  peach: string;
+  values: number[];
+  labels: string[];
+  bestDayLabel: string;
+  bestDaySeconds: number;
+  avgDailySeconds: number;
+}) {
+  const { linePath, fillPath } = buildTrendPath(values);
+
   return (
     <View style={s.glassCard}>
       <View style={s.cardHeaderRow}>
@@ -86,22 +331,13 @@ function TrendCard({ violet, peach }: { violet: string; peach: string }) {
             </SvgGradient>
           </Defs>
 
-          <Path
-            d="M0,88 C36,52 64,112 100,90 C130,72 150,40 180,58 C206,74 232,104 268,78 C296,58 320,34 344,28 C366,22 382,48 400,56 L400,130 L0,130 Z"
-            fill="url(#trendFill)"
-          />
-          <Path
-            d="M0,88 C36,52 64,112 100,90 C130,72 150,40 180,58 C206,74 232,104 268,78 C296,58 320,34 344,28 C366,22 382,48 400,56"
-            fill="none"
-            stroke="url(#trendLine)"
-            strokeWidth={4}
-            strokeLinecap="round"
-          />
+          <Path d={fillPath} fill="url(#trendFill)" />
+          <Path d={linePath} fill="none" stroke="url(#trendLine)" strokeWidth={4} strokeLinecap="round" />
         </Svg>
       </View>
 
       <View style={s.dayRow}>
-        {DAY_LABELS.map(day => (
+        {labels.map(day => (
           <Text key={day} style={s.dayLabel}>
             {day}
           </Text>
@@ -114,21 +350,21 @@ function TrendCard({ violet, peach }: { violet: string; peach: string }) {
             <View style={[s.dot, { backgroundColor: '#C084FC' }]} />
             <Text style={s.trendMetaLabel}>Best Day</Text>
           </View>
-          <Text style={s.trendMetaValue}>Friday - 3h 10m</Text>
+          <Text style={s.trendMetaValue}>{`${bestDayLabel} - ${formatHoursAndMinutes(bestDaySeconds)}`}</Text>
         </View>
         <View style={s.trendMetaRow}>
           <View style={s.trendMetaLeft}>
             <View style={[s.dot, { backgroundColor: '#815cf0' }]} />
             <Text style={s.trendMetaLabel}>Average</Text>
           </View>
-          <Text style={s.trendMetaValue}>1h 48m/day</Text>
+          <Text style={s.trendMetaValue}>{`${formatHoursAndMinutes(avgDailySeconds)}/day`}</Text>
         </View>
       </View>
     </View>
   );
 }
 
-function HeatmapCard() {
+function HeatmapCard({ heatmap }: { heatmap: HeatCell[][] }) {
   return (
     <View style={s.glassCard}>
       <View style={s.heatLegendRow}>
@@ -142,7 +378,7 @@ function HeatmapCard() {
       </View>
 
       <View style={s.heatGrid}>
-        {HEATMAP_GRID.flatMap((row, rowIndex) =>
+        {heatmap.flatMap((row, rowIndex) =>
           row.map((cell, columnIndex) => (
             <View
               key={`${rowIndex}-${columnIndex}`}
@@ -163,7 +399,13 @@ function HeatmapCard() {
   );
 }
 
-function DistributionCard() {
+function DistributionCard({
+  distribution,
+  totalFocusSeconds,
+}: {
+  distribution: DistributionItem[];
+  totalFocusSeconds: number;
+}) {
   let accumulated = 0;
 
   return (
@@ -180,7 +422,7 @@ function DistributionCard() {
               fill="none"
             />
 
-            {DISTRIBUTION.map(item => {
+            {distribution.map(item => {
               const segmentLength = DONUT_CIRCUMFERENCE * item.percent;
               const segment = (
                 <Circle
@@ -204,20 +446,20 @@ function DistributionCard() {
           </Svg>
 
           <View style={s.donutCenterTextWrap}>
-            <Text style={s.donutTotal}>32h</Text>
-            <Text style={s.donutCaption}>TOTAL</Text>
+            <Text style={s.donutTotal}>{formatHoursAndMinutes(totalFocusSeconds)}</Text>
+            <Text style={s.donutCaption}>FOCUS TOTAL</Text>
           </View>
         </View>
       </View>
 
       <View style={s.legendRowsWrap}>
-        {DISTRIBUTION.map(item => (
+        {distribution.map(item => (
           <View key={item.label} style={s.legendRow}>
             <View style={s.legendLeft}>
               <View style={[s.dot, { backgroundColor: item.color }]} />
               <Text style={s.legendLabel}>{item.label}</Text>
             </View>
-            <Text style={s.legendValue}>{Math.round(item.percent * 100)}%</Text>
+            <Text style={s.legendValue}>{`${Math.round(item.percent * 100)}%`}</Text>
           </View>
         ))}
       </View>
@@ -225,17 +467,27 @@ function DistributionCard() {
   );
 }
 
-function FocusBreakCard() {
+function FocusBreakCard({
+  focusSeconds,
+  breakSeconds,
+}: {
+  focusSeconds: number;
+  breakSeconds: number;
+}) {
+  const total = focusSeconds + breakSeconds;
+  const focusPercent = total > 0 ? Math.round((focusSeconds / total) * 100) : 0;
+  const breakPercent = Math.max(0, 100 - focusPercent);
+
   return (
     <View style={s.glassCard}>
       <View style={s.ratioHeaderRow}>
         <View>
           <Text style={s.ratioTitle}>Focus Time</Text>
-          <Text style={s.ratioValue}>31h 30m (73%)</Text>
+          <Text style={s.ratioValue}>{`${formatHoursAndMinutes(focusSeconds)} (${focusPercent}%)`}</Text>
         </View>
         <View style={s.ratioRight}>
           <Text style={s.ratioTitle}>Break Time</Text>
-          <Text style={s.ratioValue}>11h 50m (27%)</Text>
+          <Text style={s.ratioValue}>{`${formatHoursAndMinutes(breakSeconds)} (${breakPercent}%)`}</Text>
         </View>
       </View>
 
@@ -244,9 +496,11 @@ function FocusBreakCard() {
           colors={['#815cf0', '#C084FC', '#FF9068']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
-          style={s.ratioBarFill}
+          style={[s.ratioBarFill, { width: `${focusPercent}%` }]}
         />
       </View>
+
+      <Text style={s.ratioFootnote}>Based on recent completed sessions.</Text>
     </View>
   );
 }
@@ -255,6 +509,24 @@ export default function StatisticsScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
   const darkMode = useSettingsStore(state => state.darkMode);
   const theme = React.useMemo(() => getThemeBrand(darkMode), [darkMode]);
+  const [history, setHistory] = React.useState<SessionHistoryEntry[]>([]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    readSessionHistory().then(stored => {
+      if (!isMounted) {
+        return;
+      }
+      setHistory(stored);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const analytics = React.useMemo(() => computeAnalytics(history), [history]);
 
   return (
     <View style={[s.root, { backgroundColor: theme.bgStart }]}>
@@ -279,28 +551,42 @@ export default function StatisticsScreen({ onBack }: Props) {
         </View>
 
         <View style={s.summaryRow}>
-          <SummaryCard label="TODAY" value="2h 15m" />
-          <SummaryCard label="THIS WEEK" value="12h 40m" />
-          <SummaryCard label="SESSIONS" value="4" />
+          <SummaryCard label="TODAY" value={formatHoursAndMinutes(analytics.todayFocusSeconds)} />
+          <SummaryCard label="THIS WEEK" value={formatHoursAndMinutes(analytics.weekFocusSeconds)} />
+          <SummaryCard label="SESSIONS" value={analytics.todayFocusSessions.toString()} />
         </View>
 
         <View style={s.sectionWrap}>
-          <TrendCard violet={theme.violet} peach={theme.peach} />
+          <TrendCard
+            violet={theme.violet}
+            peach={theme.peach}
+            values={analytics.trendValues}
+            labels={analytics.trendLabels}
+            bestDayLabel={analytics.bestDayLabel}
+            bestDaySeconds={analytics.bestDaySeconds}
+            avgDailySeconds={analytics.avgDailySeconds}
+          />
         </View>
 
         <View style={s.sectionWrap}>
           <Text style={s.sectionTitle}>Focus Intensity Heatmap</Text>
-          <HeatmapCard />
+          <HeatmapCard heatmap={analytics.heatmap} />
         </View>
 
         <View style={s.sectionWrap}>
           <Text style={s.sectionTitle}>Focus Distribution</Text>
-          <DistributionCard />
+          <DistributionCard
+            distribution={analytics.distribution}
+            totalFocusSeconds={analytics.distributionTotalFocusSeconds}
+          />
         </View>
 
         <View style={s.sectionWrap}>
           <Text style={s.sectionTitle}>Focus / Break Ratio</Text>
-          <FocusBreakCard />
+          <FocusBreakCard
+            focusSeconds={analytics.ratioFocusSeconds}
+            breakSeconds={analytics.ratioBreakSeconds}
+          />
         </View>
       </ScrollView>
     </View>
@@ -367,6 +653,7 @@ const s = StyleSheet.create({
     color: '#C084FC',
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
   sectionWrap: {
     marginTop: 22,
@@ -429,6 +716,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
   },
   trendMetaLeft: {
     flexDirection: 'row',
@@ -499,9 +787,10 @@ const s = StyleSheet.create({
   },
   donutTotal: {
     color: '#fff',
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '700',
-    lineHeight: 34,
+    lineHeight: 31,
+    textAlign: 'center',
   },
   donutCaption: {
     color: 'rgba(192,132,252,0.8)',
@@ -522,6 +811,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    maxWidth: '72%',
   },
   legendLabel: {
     color: 'rgba(255,255,255,0.78)',
@@ -538,6 +828,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     marginBottom: 12,
+    gap: 10,
   },
   ratioRight: {
     alignItems: 'flex-end',
@@ -562,7 +853,12 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(129,92,240,0.25)',
   },
   ratioBarFill: {
-    width: '73%',
     height: '100%',
+  },
+  ratioFootnote: {
+    marginTop: 8,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
+    fontWeight: '500',
   },
 });
