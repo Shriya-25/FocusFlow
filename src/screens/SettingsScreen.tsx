@@ -120,13 +120,13 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
                   colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: getSliderFillPercent(focusDuration, 5, 60) }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(focusDuration, 15, 60) }]}
                 />
                 <Slider
                   style={s.sliderControl}
-                  minimumValue={5}
+                  minimumValue={15}
                   maximumValue={60}
-                  step={1}
+                  step={5}
                   minimumTrackTintColor="transparent"
                   maximumTrackTintColor="transparent"
                   thumbTintColor="rgba(255,255,255,0.9)"
@@ -146,13 +146,13 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
                   colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: getSliderFillPercent(shortBreak, 1, 15) }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(shortBreak, 5, 15) }]}
                 />
                 <Slider
                   style={s.sliderControl}
-                  minimumValue={1}
+                  minimumValue={5}
                   maximumValue={15}
-                  step={1}
+                  step={5}
                   minimumTrackTintColor="transparent"
                   maximumTrackTintColor="transparent"
                   thumbTintColor="rgba(255,255,255,0.9)"
@@ -172,13 +172,13 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
                   colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: getSliderFillPercent(longBreak, 10, 30) }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(longBreak, 15, 30) }]}
                 />
                 <Slider
                   style={s.sliderControl}
-                  minimumValue={10}
+                  minimumValue={15}
                   maximumValue={30}
-                  step={1}
+                  step={5}
                   minimumTrackTintColor="transparent"
                   maximumTrackTintColor="transparent"
                   thumbTintColor="rgba(255,255,255,0.9)"
@@ -198,12 +198,12 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
                   colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: getSliderFillPercent(cycles, 2, 8) }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(cycles, 2, 6) }]}
                 />
                 <Slider
                   style={s.sliderControl}
                   minimumValue={2}
-                  maximumValue={8}
+                  maximumValue={6}
                   step={1}
                   minimumTrackTintColor="transparent"
                   maximumTrackTintColor="transparent"

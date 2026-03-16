@@ -6,6 +6,12 @@ const SETTINGS_STORAGE_KEY = 'focusflow_settings';
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
+/** Round value to the nearest allowed step, then clamp within [min, max]. */
+const snapToStep = (value: number, step: number, min: number, max: number) => {
+  const snapped = Math.round((value - min) / step) * step + min;
+  return clamp(snapped, min, max);
+};
+
 export type FocusFlowSettings = {
   focusDuration: number;
   shortBreak: number;
@@ -41,14 +47,14 @@ const sanitizeSettings = (
     ...incoming,
   };
 
-  const focusDuration = clamp(Math.round(merged.focusDuration), 5, 60);
-  const shortBreak = clamp(Math.round(merged.shortBreak), 1, 15);
-  let longBreak = clamp(Math.round(merged.longBreak), 10, 30);
-  const cycles = clamp(Math.round(merged.cycles), 2, 8);
-
-  if (longBreak <= shortBreak) {
-    longBreak = clamp(shortBreak + 1, 10, 30);
-  }
+  // Focus: 15–60 min, step 5
+  const focusDuration = snapToStep(merged.focusDuration, 5, 15, 60);
+  // Short break: 5–15 min, step 5
+  const shortBreak = snapToStep(merged.shortBreak, 5, 5, 15);
+  // Long break: 15–30 min, step 5
+  const longBreak = snapToStep(merged.longBreak, 5, 15, 30);
+  // Cycles: 2–6, step 1
+  const cycles = clamp(Math.round(merged.cycles), 2, 6);
 
   return {
     focusDuration,
