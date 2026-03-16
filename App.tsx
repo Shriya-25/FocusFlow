@@ -12,9 +12,17 @@ import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AboutPomodoroScreen from './src/screens/AboutPomodoroScreen';
+import StatisticsScreen from './src/screens/StatisticsScreen';
 import { hydrateSettingsStore } from './src/storage/settingsStore';
 
-type Screen = 'onboarding' | 'gmail-login' | 'home' | 'profile' | 'settings' | 'about-pomodoro';
+type Screen =
+  | 'onboarding'
+  | 'gmail-login'
+  | 'home'
+  | 'profile'
+  | 'settings'
+  | 'about-pomodoro'
+  | 'statistics';
 
 function App() {
   const [screen, setScreen] = React.useState<Screen>('onboarding');
@@ -85,12 +93,15 @@ function App() {
         />
       ) : screen === 'about-pomodoro' ? (
         <AboutPomodoroScreen onBack={() => setScreen('settings')} />
+      ) : screen === 'statistics' ? (
+        <StatisticsScreen onBack={() => setScreen('home')} />
       ) : (
         <HomeScreen
           userName={userName}
           userPhoto={userPhoto}
           avatarEmoji={selectedAvatar}
           onProfilePress={() => setScreen('profile')}
+          onStatisticsPress={() => setScreen('statistics')}
           onSettingsPress={() => setScreen('settings')}
         />
       )}

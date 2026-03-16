@@ -74,6 +74,7 @@ type Props = {
   userPhoto?: string | null;
   avatarEmoji?: string;
   onProfilePress?: () => void;
+  onStatisticsPress?: () => void;
   onSettingsPress?: () => void;
 };
 
@@ -82,6 +83,7 @@ export default function HomeScreen({
   userPhoto,
   avatarEmoji = '🦁',
   onProfilePress,
+  onStatisticsPress,
   onSettingsPress,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -505,7 +507,7 @@ export default function HomeScreen({
         </TouchableOpacity>
 
         <View style={s.headerButtons}>
-          <TouchableOpacity style={s.iconBtn} activeOpacity={0.75}>
+          <TouchableOpacity style={s.iconBtn} activeOpacity={0.75} onPress={onStatisticsPress}>
             <AnalyticsIcon size={20} color="#fff" />
           </TouchableOpacity>
           <TouchableOpacity style={s.iconBtn} activeOpacity={0.75} onPress={onSettingsPress}>
