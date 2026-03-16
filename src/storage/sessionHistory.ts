@@ -11,6 +11,8 @@ export type SessionHistoryEntry = {
   tagName: string | null;
 };
 
+export type SessionHistoryAudience = 'account' | 'guest';
+
 type SessionHistoryInput = {
   sessionType: CompletedSessionType;
   durationSeconds: number;
@@ -19,8 +21,13 @@ type SessionHistoryInput = {
   tagName?: string | null;
 };
 
-const SESSION_HISTORY_KEY = 'focusflow.sessionHistory.v1';
+const ACCOUNT_SESSION_HISTORY_KEY = 'focusflow.sessionHistory.v1';
+const GUEST_SESSION_HISTORY_KEY = 'focusflow.guestSessionHistory.v1';
 const MAX_SESSION_HISTORY = 2500;
+
+const getSessionHistoryKey = (audience: SessionHistoryAudience) => {
+  return audience === 'guest' ? GUEST_SESSION_HISTORY_KEY : ACCOUNT_SESSION_HISTORY_KEY;
+};
 
 const isValidSessionType = (value: unknown): value is CompletedSessionType => {
   return value === 'focus' || value === 'shortBreak' || value === 'longBreak';
@@ -61,9 +68,22 @@ const normalizeHistoryEntries = (input: unknown): SessionHistoryEntry[] => {
     });
 };
 
-export const readSessionHistory = async (): Promise<SessionHistoryEntry[]> => {
+const writeSessionHistory = async (
+  audience: SessionHistoryAudience,
+  entries: SessionHistoryEntry[],
+): Promise<void> => {
+  const next = normalizeHistoryEntries(entries)
+    .sort((a, b) => a.completedAt - b.completedAt)
+    .slice(-MAX_SESSION_HISTORY);
+
+  await AsyncStorage.setItem(getSessionHistoryKey(audience), JSON.stringify(next));
+};
+
+export const readSessionHistory = async (
+  audience: SessionHistoryAudience = 'account',
+): Promise<SessionHistoryEntry[]> => {
   try {
-    const raw = await AsyncStorage.getItem(SESSION_HISTORY_KEY);
+    const raw = await AsyncStorage.getItem(getSessionHistoryKey(audience));
     if (!raw) {
       return [];
     }
@@ -81,7 +101,7 @@ export const appendSessionHistory = async ({
   completedAt = Date.now(),
   tagId = null,
   tagName = null,
-}: SessionHistoryInput): Promise<void> => {
+}: SessionHistoryInput, audience: SessionHistoryAudience = 'account'): Promise<void> => {
   if (!isValidSessionType(sessionType)) {
     return;
   }
@@ -90,7 +110,7 @@ export const appendSessionHistory = async ({
   const normalizedCompletedAt = Math.round(completedAt);
 
   try {
-    const existing = await readSessionHistory();
+    const existing = await readSessionHistory(audience);
 
     const nextEntry: SessionHistoryEntry = {
       id: `${normalizedCompletedAt}-${Math.random().toString(36).slice(2, 9)}`,
@@ -101,9 +121,39 @@ export const appendSessionHistory = async ({
       tagName,
     };
 
-    const next = [...existing, nextEntry].slice(-MAX_SESSION_HISTORY);
-    await AsyncStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(next));
+    await writeSessionHistory(audience, [...existing, nextEntry]);
   } catch {
     // Ignore persistence errors so timer flow stays uninterrupted.
+  }
+};
+
+export const hasGuestSessionHistory = async (): Promise<boolean> => {
+  const entries = await readSessionHistory('guest');
+  return entries.length > 0;
+};
+
+export const importGuestSessionHistory = async (): Promise<void> => {
+  try {
+    const [guestEntries, accountEntries] = await Promise.all([
+      readSessionHistory('guest'),
+      readSessionHistory('account'),
+    ]);
+
+    if (guestEntries.length === 0) {
+      return;
+    }
+
+    await writeSessionHistory('account', [...accountEntries, ...guestEntries]);
+    await AsyncStorage.removeItem(GUEST_SESSION_HISTORY_KEY);
+  } catch {
+    // Ignore import errors to avoid blocking sign-in.
+  }
+};
+
+export const clearGuestSessionHistory = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(GUEST_SESSION_HISTORY_KEY);
+  } catch {
+    // Ignore removal errors to avoid blocking sign-in.
   }
 };

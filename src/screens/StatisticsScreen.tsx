@@ -26,6 +26,8 @@ import {
 
 type Props = {
   onBack?: () => void;
+  isGuestUser?: boolean;
+  onSignInPress?: () => void;
 };
 
 type HeatCell = 0 | 1 | 2 | 3 | 4;
@@ -505,13 +507,22 @@ function FocusBreakCard({
   );
 }
 
-export default function StatisticsScreen({ onBack }: Props) {
+export default function StatisticsScreen({
+  onBack,
+  isGuestUser = false,
+  onSignInPress,
+}: Props) {
   const insets = useSafeAreaInsets();
   const darkMode = useSettingsStore(state => state.darkMode);
   const theme = React.useMemo(() => getThemeBrand(darkMode), [darkMode]);
   const [history, setHistory] = React.useState<SessionHistoryEntry[]>([]);
 
   React.useEffect(() => {
+    if (isGuestUser) {
+      setHistory([]);
+      return;
+    }
+
     let isMounted = true;
 
     readSessionHistory().then(stored => {
@@ -524,7 +535,7 @@ export default function StatisticsScreen({ onBack }: Props) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isGuestUser]);
 
   const analytics = React.useMemo(() => computeAnalytics(history), [history]);
 
@@ -550,44 +561,73 @@ export default function StatisticsScreen({ onBack }: Props) {
           <View style={s.headerSpacer} />
         </View>
 
-        <View style={s.summaryRow}>
-          <SummaryCard label="TODAY" value={formatHoursAndMinutes(analytics.todayFocusSeconds)} />
-          <SummaryCard label="THIS WEEK" value={formatHoursAndMinutes(analytics.weekFocusSeconds)} />
-          <SummaryCard label="SESSIONS" value={analytics.todayFocusSessions.toString()} />
-        </View>
+        {isGuestUser ? (
+          <View style={s.guestStateWrap}>
+            <View style={s.guestStateCard}>
+              <Text style={s.guestEyebrow}>GUEST MODE</Text>
+              <Text style={s.guestTitle}>Focus Analytics</Text>
+              <Text style={s.guestMessage}>
+                Sign in to view your productivity insights and focus statistics.
+              </Text>
 
-        <View style={s.sectionWrap}>
-          <TrendCard
-            violet={theme.violet}
-            peach={theme.peach}
-            values={analytics.trendValues}
-            labels={analytics.trendLabels}
-            bestDayLabel={analytics.bestDayLabel}
-            bestDaySeconds={analytics.bestDaySeconds}
-            avgDailySeconds={analytics.avgDailySeconds}
-          />
-        </View>
+              <Pressable
+                style={s.primaryCtaWrap}
+                onPress={onSignInPress}
+                android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
+              >
+                <LinearGradient
+                  colors={[theme.violet, '#C084FC', theme.peach]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={s.primaryCta}
+                >
+                  <Text style={s.primaryCtaText}>Sign In</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <>
+            <View style={s.summaryRow}>
+              <SummaryCard label="TODAY" value={formatHoursAndMinutes(analytics.todayFocusSeconds)} />
+              <SummaryCard label="THIS WEEK" value={formatHoursAndMinutes(analytics.weekFocusSeconds)} />
+              <SummaryCard label="SESSIONS" value={analytics.todayFocusSessions.toString()} />
+            </View>
 
-        <View style={s.sectionWrap}>
-          <Text style={s.sectionTitle}>Focus Intensity Heatmap</Text>
-          <HeatmapCard heatmap={analytics.heatmap} />
-        </View>
+            <View style={s.sectionWrap}>
+              <TrendCard
+                violet={theme.violet}
+                peach={theme.peach}
+                values={analytics.trendValues}
+                labels={analytics.trendLabels}
+                bestDayLabel={analytics.bestDayLabel}
+                bestDaySeconds={analytics.bestDaySeconds}
+                avgDailySeconds={analytics.avgDailySeconds}
+              />
+            </View>
 
-        <View style={s.sectionWrap}>
-          <Text style={s.sectionTitle}>Focus Distribution</Text>
-          <DistributionCard
-            distribution={analytics.distribution}
-            totalFocusSeconds={analytics.distributionTotalFocusSeconds}
-          />
-        </View>
+            <View style={s.sectionWrap}>
+              <Text style={s.sectionTitle}>Focus Intensity Heatmap</Text>
+              <HeatmapCard heatmap={analytics.heatmap} />
+            </View>
 
-        <View style={s.sectionWrap}>
-          <Text style={s.sectionTitle}>Focus / Break Ratio</Text>
-          <FocusBreakCard
-            focusSeconds={analytics.ratioFocusSeconds}
-            breakSeconds={analytics.ratioBreakSeconds}
-          />
-        </View>
+            <View style={s.sectionWrap}>
+              <Text style={s.sectionTitle}>Focus Distribution</Text>
+              <DistributionCard
+                distribution={analytics.distribution}
+                totalFocusSeconds={analytics.distributionTotalFocusSeconds}
+              />
+            </View>
+
+            <View style={s.sectionWrap}>
+              <Text style={s.sectionTitle}>Focus / Break Ratio</Text>
+              <FocusBreakCard
+                focusSeconds={analytics.ratioFocusSeconds}
+                breakSeconds={analytics.ratioBreakSeconds}
+              />
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -626,6 +666,59 @@ const s = StyleSheet.create({
   headerSpacer: {
     width: 42,
     height: 42,
+  },
+  guestStateWrap: {
+    flex: 1,
+    minHeight: 540,
+    justifyContent: 'center',
+    paddingTop: 24,
+  },
+  guestStateCard: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 22,
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  guestEyebrow: {
+    color: 'rgba(255,255,255,0.52)',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.6,
+  },
+  guestTitle: {
+    marginTop: 14,
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+  },
+  guestMessage: {
+    marginTop: 12,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+  },
+  primaryCtaWrap: {
+    width: '100%',
+    marginTop: 28,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  primaryCta: {
+    minHeight: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryCtaText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   summaryRow: {
     flexDirection: 'row',

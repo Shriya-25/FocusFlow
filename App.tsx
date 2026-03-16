@@ -14,6 +14,11 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import AboutPomodoroScreen from './src/screens/AboutPomodoroScreen';
 import StatisticsScreen from './src/screens/StatisticsScreen';
 import { hydrateSettingsStore } from './src/storage/settingsStore';
+import {
+  clearGuestSessionHistory,
+  hasGuestSessionHistory,
+  importGuestSessionHistory,
+} from './src/storage/sessionHistory';
 
 type Screen =
   | 'onboarding'
@@ -36,6 +41,16 @@ function App() {
     hydrateSettingsStore().catch(() => undefined);
   }, []);
 
+  const finalizeSignIn = React.useCallback(
+    (name: string, photo: string | null, targetScreen: 'home' | 'profile') => {
+      setUserName(name);
+      setUserPhoto(photo);
+      setIsAuthenticated(true);
+      setScreen(targetScreen);
+    },
+    [],
+  );
+
   const handleGoogleLogin = async (targetScreen: 'home' | 'profile' = 'home') => {
     if (isSigningIn) {
       return;
@@ -48,10 +63,31 @@ function App() {
       const userCredential = await signInWithGoogle();
       const name = userCredential.user.displayName ?? userCredential.user.email ?? 'User';
       const photo = userCredential.user.photoURL ?? null;
-      setUserName(name);
-      setUserPhoto(photo);
-      setIsAuthenticated(true);
-      setScreen(targetScreen);
+      const guestDataExists = await hasGuestSessionHistory();
+
+      finalizeSignIn(name, photo, targetScreen);
+
+      if (guestDataExists) {
+        Alert.alert(
+          'Import focus data?',
+          'We found focus data on this device.\n\nDo you want to add it to your account?',
+          [
+            {
+              text: 'Start Fresh',
+              style: 'destructive',
+              onPress: () => {
+                clearGuestSessionHistory().catch(() => undefined);
+              },
+            },
+            {
+              text: 'Import Data',
+              onPress: () => {
+                importGuestSessionHistory().catch(() => undefined);
+              },
+            },
+          ],
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to sign in right now.';
       Alert.alert('Google Sign-In failed', message);
@@ -94,12 +130,17 @@ function App() {
       ) : screen === 'about-pomodoro' ? (
         <AboutPomodoroScreen onBack={() => setScreen('settings')} />
       ) : screen === 'statistics' ? (
-        <StatisticsScreen onBack={() => setScreen('home')} />
+        <StatisticsScreen
+          onBack={() => setScreen('home')}
+          isGuestUser={!isAuthenticated}
+          onSignInPress={() => setScreen('gmail-login')}
+        />
       ) : (
         <HomeScreen
           userName={userName}
           userPhoto={userPhoto}
           avatarEmoji={selectedAvatar}
+          isGuestUser={!isAuthenticated}
           onProfilePress={() => setScreen('profile')}
           onStatisticsPress={() => setScreen('statistics')}
           onSettingsPress={() => setScreen('settings')}

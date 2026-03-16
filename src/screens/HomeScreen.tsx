@@ -74,6 +74,7 @@ type Props = {
   userName?: string;
   userPhoto?: string | null;
   avatarEmoji?: string;
+  isGuestUser?: boolean;
   onProfilePress?: () => void;
   onStatisticsPress?: () => void;
   onSettingsPress?: () => void;
@@ -83,12 +84,14 @@ export default function HomeScreen({
   userName = 'User',
   userPhoto,
   avatarEmoji = '🦁',
+  isGuestUser = false,
   onProfilePress,
   onStatisticsPress,
   onSettingsPress,
 }: Props) {
   const insets = useSafeAreaInsets();
   const endAtRef = React.useRef<number | null>(null);
+  const intervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const {
     focusDuration,
     shortBreak,
@@ -115,7 +118,7 @@ export default function HomeScreen({
     [focusDuration, shortBreak, longBreak],
   );
 
-  const [sessionDurationMs, setSessionDurationMs] = React.useState(() => focusDuration * 60 * 1000);
+  const [totalDurationMs, setTotalDurationMs] = React.useState(() => focusDuration * 60 * 1000);
   const [sessionType, setSessionType] = React.useState<SessionType>('focus');
   const [remainingMs, setRemainingMs] = React.useState(() => focusDuration * 60 * 1000);
   const [isRunning, setIsRunning] = React.useState(false);
@@ -134,11 +137,61 @@ export default function HomeScreen({
   const [customTagName, setCustomTagName] = React.useState('');
   const [customTagEmoji, setCustomTagEmoji] = React.useState('✨');
   const [tagLimitMessage, setTagLimitMessage] = React.useState('');
+  const [timerRunVersion, setTimerRunVersion] = React.useState(0);
   const remainingMsRef = React.useRef(remainingMs);
 
   React.useEffect(() => {
     remainingMsRef.current = remainingMs;
   }, [remainingMs]);
+
+  const clearTimerInterval = React.useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    endAtRef.current = null;
+  }, []);
+
+  const completeCurrentSession = React.useCallback(
+    (finishedSession: SessionType, remainingAtFinishMs: number) => {
+      clearTimerInterval();
+      setIsRunning(false);
+      setHasStarted(false);
+      setRemainingMs(0);
+
+      const elapsedSeconds = Math.max(1, Math.round((totalDurationMs - remainingAtFinishMs) / 1000));
+
+      appendSessionHistory({
+        sessionType: finishedSession,
+        durationSeconds: elapsedSeconds,
+        tagId: finishedSession === 'focus' ? (selectedTag?.id ?? null) : null,
+        tagName: finishedSession === 'focus' ? (selectedTag?.name ?? null) : null,
+      }, isGuestUser ? 'guest' : 'account').catch(() => undefined);
+
+      if (finishedSession === 'focus') {
+        const completedCycle = completedFocusCycles + 1;
+        setCompletedFocusCycles(completedCycle);
+        setLastCycleCompleted(completedCycle);
+        setLastFocusSeconds(elapsedSeconds);
+        setCompletionKind('focus');
+        setIsCompletionModalVisible(true);
+        return;
+      }
+
+      setLastCompletedBreakType(finishedSession);
+      setCompletionKind('break');
+      setIsCompletionModalVisible(true);
+    },
+    [
+      clearTimerInterval,
+      completedFocusCycles,
+      isGuestUser,
+      selectedTag?.id,
+      selectedTag?.name,
+      totalDurationMs,
+    ],
+  );
 
   const notifySessionFinished = React.useCallback(
     (finishedSession: SessionType) => {
@@ -177,7 +230,7 @@ export default function HomeScreen({
     }
 
     const nextDurationMs = getDurationMsBySessionType(sessionType);
-    setSessionDurationMs(nextDurationMs);
+    setTotalDurationMs(nextDurationMs);
     setRemainingMs(nextDurationMs);
   }, [
     focusDuration,
@@ -195,53 +248,29 @@ export default function HomeScreen({
       return;
     }
 
+    clearTimerInterval();
     endAtRef.current = Date.now() + remainingMsRef.current;
 
-    const intervalId = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       const nextMs = Math.max(0, (endAtRef.current ?? Date.now()) - Date.now());
       setRemainingMs(nextMs);
 
       if (nextMs <= 0) {
-        endAtRef.current = null;
-        setIsRunning(false);
-
-        appendSessionHistory({
-          sessionType,
-          durationSeconds: Math.max(1, Math.round(sessionDurationMs / 1000)),
-          tagId: sessionType === 'focus' ? (selectedTag?.id ?? null) : null,
-          tagName: sessionType === 'focus' ? (selectedTag?.name ?? null) : null,
-        }).catch(() => undefined);
-
-        if (sessionType === 'focus') {
-          const completedCycle = completedFocusCycles + 1;
-          setCompletedFocusCycles(completedCycle);
-          setLastCycleCompleted(completedCycle);
-          setLastFocusSeconds(Math.round(sessionDurationMs / 1000));
-          setHasStarted(false);
-          setCompletionKind('focus');
-          setIsCompletionModalVisible(true);
-        } else {
-          setLastCompletedBreakType(sessionType);
-          setHasStarted(false);
-          setCompletionKind('break');
-          setIsCompletionModalVisible(true);
-        }
-
+        completeCurrentSession(sessionType, 0);
         notifySessionFinished(sessionType);
       }
     }, 100);
 
     return () => {
-      clearInterval(intervalId);
+      clearTimerInterval();
     };
   }, [
+    clearTimerInterval,
+    completeCurrentSession,
     isRunning,
-    sessionType,
-    completedFocusCycles,
-    sessionDurationMs,
     notifySessionFinished,
-    selectedTag?.id,
-    selectedTag?.name,
+    sessionType,
+    timerRunVersion,
   ]);
 
   React.useEffect(() => {
@@ -296,7 +325,7 @@ export default function HomeScreen({
   }, [selectedTag]);
 
   const remainingSeconds = Math.ceil(remainingMs / 1000);
-  const remainingProgress = Math.max(0, Math.min(1, remainingMs / sessionDurationMs));
+  const remainingProgress = Math.max(0, Math.min(1, remainingMs / Math.max(1, totalDurationMs)));
   const dashOffset = CIRCUMFERENCE * (1 - remainingProgress);
   const minutes = Math.floor(remainingSeconds / 60)
     .toString()
@@ -313,27 +342,32 @@ export default function HomeScreen({
   };
 
   const resetCurrentSession = (shouldRun = false) => {
-    const nextDurationMs = getDurationMsBySessionType(sessionType);
-    setSessionDurationMs(nextDurationMs);
-    setRemainingMs(nextDurationMs);
+    clearTimerInterval();
+    setRemainingMs(totalDurationMs);
     setHasStarted(shouldRun);
     setIsRunning(shouldRun);
+
+    if (shouldRun) {
+      setTimerRunVersion(version => version + 1);
+    }
   };
 
   const handlePlayPause = () => {
     if (isRunning) {
+      clearTimerInterval();
       setIsRunning(false);
       return;
     }
 
     if (remainingMs <= 0) {
       const nextDurationMs = getDurationMsBySessionType(sessionType);
-      setSessionDurationMs(nextDurationMs);
+      setTotalDurationMs(nextDurationMs);
       setRemainingMs(nextDurationMs);
     }
 
     setHasStarted(true);
     setIsRunning(true);
+    setTimerRunVersion(version => version + 1);
   };
 
   const handleRestart = () => {
@@ -364,13 +398,7 @@ export default function HomeScreen({
         text: 'End Session',
         style: 'destructive',
         onPress: () => {
-          setIsRunning(false);
-          setHasStarted(false);
-          setSessionType('focus');
-          const focusDurationMs = getDurationMsBySessionType('focus');
-          setSessionDurationMs(focusDurationMs);
-          setRemainingMs(focusDurationMs);
-          setIsCompletionModalVisible(false);
+          completeCurrentSession(sessionType, remainingMsRef.current);
         },
       },
     ]);
@@ -383,12 +411,13 @@ export default function HomeScreen({
     const nextDurationMs = getDurationMsBySessionType(nextBreakType);
 
     setSessionType(nextBreakType);
-    setSessionDurationMs(nextDurationMs);
+    setTotalDurationMs(nextDurationMs);
     setRemainingMs(nextDurationMs);
     setCompletionKind('focus');
     setIsCompletionModalVisible(false);
     setHasStarted(true);
     setIsRunning(true);
+    setTimerRunVersion(version => version + 1);
   };
 
   const getBreakButtonText = () => {
@@ -400,29 +429,32 @@ export default function HomeScreen({
   const handleSkipBreakAndStartFocus = () => {
     const focusDurationMs = getDurationMsBySessionType('focus');
     setSessionType('focus');
-    setSessionDurationMs(focusDurationMs);
+    setTotalDurationMs(focusDurationMs);
     setRemainingMs(focusDurationMs);
     setCompletionKind('focus');
     setIsCompletionModalVisible(false);
     setHasStarted(true);
     setIsRunning(true);
+    setTimerRunVersion(version => version + 1);
   };
 
   const handleStartNextFocusSession = () => {
     const focusDurationMs = getDurationMsBySessionType('focus');
     setSessionType('focus');
-    setSessionDurationMs(focusDurationMs);
+    setTotalDurationMs(focusDurationMs);
     setRemainingMs(focusDurationMs);
     setCompletionKind('focus');
     setIsCompletionModalVisible(false);
     setHasStarted(true);
     setIsRunning(true);
+    setTimerRunVersion(version => version + 1);
   };
 
   const handleKeepTimerIdle = () => {
+    clearTimerInterval();
     const focusDurationMs = getDurationMsBySessionType('focus');
     setSessionType('focus');
-    setSessionDurationMs(focusDurationMs);
+    setTotalDurationMs(focusDurationMs);
     setRemainingMs(focusDurationMs);
     setCompletionKind('focus');
     setIsCompletionModalVisible(false);
