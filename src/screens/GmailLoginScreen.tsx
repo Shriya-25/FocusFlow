@@ -8,7 +8,8 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BRAND } from '../utils/brand';
+import { BRAND, getThemeBrand } from '../utils/brand';
+import { useSettingsStore } from '../storage/settingsStore';
 
 type GmailLoginScreenProps = {
   onSkip?: () => void;
@@ -20,13 +21,15 @@ const GmailLoginScreen: React.FC<GmailLoginScreenProps> = ({
   onGoogleLogin,
 }) => {
   const insets = useSafeAreaInsets();
+  const darkMode = useSettingsStore(state => state.darkMode);
+  const theme = React.useMemo(() => getThemeBrand(darkMode), [darkMode]);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={BRAND.bgStart} />
+    <View style={[styles.container, { backgroundColor: theme.bgStart }]}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.bgStart} />
 
       <LinearGradient
-        colors={[BRAND.bgStart, BRAND.bgEnd]}
+        colors={[theme.bgStart, theme.bgEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}

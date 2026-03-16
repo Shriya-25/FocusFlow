@@ -9,10 +9,12 @@ import {
   TouchableOpacity,
   Linking,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, EmailIcon, GlobeIcon, InstagramIcon } from '../components/Icons/AppIcons';
-import { BRAND } from '../utils/brand';
+import { getThemeBrand } from '../utils/brand';
+import { useSettingsStore } from '../storage/settingsStore';
 
 type Props = {
   onBack?: () => void;
@@ -52,11 +54,25 @@ function SupportRow({ label, onPress }: SupportRowProps) {
 
 export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) {
   const insets = useSafeAreaInsets();
-
-  const [timerSound, setTimerSound] = React.useState(true);
-  const [notifications, setNotifications] = React.useState(true);
-  const [darkMode, setDarkMode] = React.useState(true);
   const [isContactExpanded, setIsContactExpanded] = React.useState(false);
+
+  const {
+    focusDuration,
+    shortBreak,
+    longBreak,
+    cycles,
+    timerSound,
+    notifications,
+    darkMode,
+    updateSettings,
+  } = useSettingsStore();
+
+  const theme = React.useMemo(() => getThemeBrand(darkMode), [darkMode]);
+
+  const getSliderFillPercent = React.useCallback((value: number, min: number, max: number): `${number}%` => {
+    const bounded = Math.max(min, Math.min(max, value));
+    return `${((bounded - min) / (max - min)) * 100}%` as `${number}%`;
+  }, []);
 
   const openExternalLink = async (url: string) => {
     try {
@@ -70,7 +86,7 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
     <View style={s.root}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <LinearGradient
-        colors={[BRAND.bgStart, BRAND.bgEnd]}
+        colors={[theme.bgStart, theme.bgEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}
@@ -97,14 +113,25 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
             <View style={s.sliderBlock}>
               <View style={s.sliderHeaderRow}>
                 <Text style={s.sliderLabel}>Focus duration</Text>
-                <Text style={[s.sliderValue, s.valueViolet]}>25 min</Text>
+                <Text style={[s.sliderValue, s.valueViolet]}>{focusDuration} min</Text>
               </View>
               <View style={s.progressTrack}>
                 <LinearGradient
-                  colors={[BRAND.violet, '#C084FC', BRAND.peach]}
+                  colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: '45%' }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(focusDuration, 5, 60) }]}
+                />
+                <Slider
+                  style={s.sliderControl}
+                  minimumValue={5}
+                  maximumValue={60}
+                  step={1}
+                  minimumTrackTintColor="transparent"
+                  maximumTrackTintColor="transparent"
+                  thumbTintColor="rgba(255,255,255,0.9)"
+                  value={focusDuration}
+                  onValueChange={value => updateSettings({ focusDuration: value })}
                 />
               </View>
             </View>
@@ -112,14 +139,25 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
             <View style={s.sliderBlock}>
               <View style={s.sliderHeaderRow}>
                 <Text style={s.sliderLabel}>Short break</Text>
-                <Text style={[s.sliderValue, s.valuePink]}>5 min</Text>
+                <Text style={[s.sliderValue, s.valuePink]}>{shortBreak} min</Text>
               </View>
               <View style={s.progressTrack}>
                 <LinearGradient
-                  colors={[BRAND.violet, '#C084FC', BRAND.peach]}
+                  colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: '20%' }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(shortBreak, 1, 15) }]}
+                />
+                <Slider
+                  style={s.sliderControl}
+                  minimumValue={1}
+                  maximumValue={15}
+                  step={1}
+                  minimumTrackTintColor="transparent"
+                  maximumTrackTintColor="transparent"
+                  thumbTintColor="rgba(255,255,255,0.9)"
+                  value={shortBreak}
+                  onValueChange={value => updateSettings({ shortBreak: value })}
                 />
               </View>
             </View>
@@ -127,14 +165,25 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
             <View style={s.sliderBlock}>
               <View style={s.sliderHeaderRow}>
                 <Text style={s.sliderLabel}>Long break</Text>
-                <Text style={[s.sliderValue, s.valueOrange]}>15 min</Text>
+                <Text style={[s.sliderValue, s.valueOrange]}>{longBreak} min</Text>
               </View>
               <View style={s.progressTrack}>
                 <LinearGradient
-                  colors={[BRAND.violet, '#C084FC', BRAND.peach]}
+                  colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: '35%' }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(longBreak, 10, 30) }]}
+                />
+                <Slider
+                  style={s.sliderControl}
+                  minimumValue={10}
+                  maximumValue={30}
+                  step={1}
+                  minimumTrackTintColor="transparent"
+                  maximumTrackTintColor="transparent"
+                  thumbTintColor="rgba(255,255,255,0.9)"
+                  value={longBreak}
+                  onValueChange={value => updateSettings({ longBreak: value })}
                 />
               </View>
             </View>
@@ -142,14 +191,25 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
             <View style={s.sliderBlockNoBorder}>
               <View style={s.sliderHeaderRow}>
                 <Text style={s.sliderLabel}>Cycles</Text>
-                <Text style={s.sliderValue}>4</Text>
+                <Text style={s.sliderValue}>{cycles}</Text>
               </View>
               <View style={s.progressTrack}>
                 <LinearGradient
-                  colors={[BRAND.violet, '#C084FC', BRAND.peach]}
+                  colors={[theme.violet, '#C084FC', theme.peach]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
-                  style={[s.progressFill, { width: '40%' }]}
+                  style={[s.progressFill, { width: getSliderFillPercent(cycles, 2, 8) }]}
+                />
+                <Slider
+                  style={s.sliderControl}
+                  minimumValue={2}
+                  maximumValue={8}
+                  step={1}
+                  minimumTrackTintColor="transparent"
+                  maximumTrackTintColor="transparent"
+                  thumbTintColor="rgba(255,255,255,0.9)"
+                  value={cycles}
+                  onValueChange={value => updateSettings({ cycles: value })}
                 />
               </View>
             </View>
@@ -159,11 +219,11 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
         <View style={s.sectionBlock}>
           <Text style={s.sectionTitle}>PREFERENCES</Text>
           <View style={s.glassCardNoPad}>
-            <ToggleRow label="Timer sound" value={timerSound} onToggle={() => setTimerSound(prev => !prev)} />
+            <ToggleRow label="Timer sound" value={timerSound} onToggle={() => updateSettings({ timerSound: !timerSound })} />
             <View style={s.rowDivider} />
-            <ToggleRow label="Notifications" value={notifications} onToggle={() => setNotifications(prev => !prev)} />
+            <ToggleRow label="Notifications" value={notifications} onToggle={() => updateSettings({ notifications: !notifications })} />
             <View style={s.rowDivider} />
-            <ToggleRow label="Dark mode" value={darkMode} onToggle={() => setDarkMode(prev => !prev)} />
+            <ToggleRow label="Dark mode" value={darkMode} onToggle={() => updateSettings({ darkMode: !darkMode })} />
           </View>
         </View>
 
@@ -228,7 +288,7 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BRAND.bgStart,
+    backgroundColor: '#1B1338',
   },
   scrollContent: {
     paddingHorizontal: 22,
@@ -329,6 +389,13 @@ const s = StyleSheet.create({
     height: '100%',
     borderRadius: 999,
   },
+  sliderControl: {
+    ...StyleSheet.absoluteFillObject,
+    top: -12,
+    bottom: -12,
+    left: -8,
+    right: -8,
+  },
 
   prefRow: {
     minHeight: 62,
@@ -350,7 +417,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   switchTrackOn: {
-    backgroundColor: BRAND.violet,
+    backgroundColor: '#815cf0',
   },
   switchTrackOff: {
     backgroundColor: 'rgba(255,255,255,0.22)',

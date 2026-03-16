@@ -49,6 +49,34 @@ export function PauseIcon({ size = 44, color = '#fff' }: IconProps) {
   );
 }
 
+export function RestartIcon({ size = 22, color = '#fff', strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4.5 12A7.5 7.5 0 1 0 7 6.4"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M4.5 4.8V9.3H9"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function StopIcon({ size = 20, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="7" y="7" width="10" height="10" rx="2" fill={color} />
+    </Svg>
+  );
+}
+
 export function BackIcon({ size = 22, color = '#fff', strokeWidth = 2.3 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

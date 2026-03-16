@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BRAND } from '../utils/brand';
+import { BRAND, getThemeBrand } from '../utils/brand';
+import { useSettingsStore } from '../storage/settingsStore';
 
 type OnboardingScreenProps = {
   onComplete?: () => void;
@@ -42,6 +43,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   onLoginPress,
 }) => {
   const insets = useSafeAreaInsets();
+  const darkMode = useSettingsStore(state => state.darkMode);
+  const theme = useMemo(() => getThemeBrand(darkMode), [darkMode]);
   const [currentScreen, setCurrentScreen] = useState(0);
   const pulseAnim = useRef(new Animated.Value(0.95)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -236,11 +239,11 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={BRAND.bgStart} />
+    <View style={[styles.container, { backgroundColor: theme.bgStart }]}> 
+      <StatusBar barStyle="light-content" backgroundColor={theme.bgStart} />
 
       <LinearGradient
-        colors={[BRAND.bgStart, BRAND.bgEnd]}
+        colors={[theme.bgStart, theme.bgEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}

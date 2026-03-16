@@ -12,7 +12,8 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, CrownIcon, InfoIcon } from '../components/Icons/AppIcons';
-import { BRAND } from '../utils/brand';
+import { BRAND, getThemeBrand } from '../utils/brand';
+import { useSettingsStore } from '../storage/settingsStore';
 
 const PURPLE = BRAND.violet;
 const PINK = BRAND.magenta;
@@ -52,6 +53,8 @@ export default function ProfileScreen({
   onBack,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const darkMode = useSettingsStore(state => state.darkMode);
+  const theme = useMemo(() => getThemeBrand(darkMode), [darkMode]);
   const [nowMs, setNowMs] = React.useState(Date.now());
 
   React.useEffect(() => {
@@ -78,10 +81,10 @@ export default function ProfileScreen({
   }, [nowMs]);
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: theme.bgStart }]}> 
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <LinearGradient
-        colors={[BRAND.bgStart, BRAND.bgEnd]}
+        colors={[theme.bgStart, theme.bgEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFillObject}

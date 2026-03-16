@@ -10,8 +10,9 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import GmailLoginScreen from './src/screens/GmailLoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
-import SettingsScreen from './src/screens/SettingsScreen.tsx';
-import AboutPomodoroScreen from './src/screens/AboutPomodoroScreen.tsx';
+import SettingsScreen from './src/screens/SettingsScreen';
+import AboutPomodoroScreen from './src/screens/AboutPomodoroScreen';
+import { hydrateSettingsStore } from './src/storage/settingsStore';
 
 type Screen = 'onboarding' | 'gmail-login' | 'home' | 'profile' | 'settings' | 'about-pomodoro';
 
@@ -19,9 +20,13 @@ function App() {
   const [screen, setScreen] = React.useState<Screen>('onboarding');
   const [userName, setUserName] = React.useState('');
   const [userPhoto, setUserPhoto] = React.useState<string | null>(null);
-  const [selectedAvatar, setSelectedAvatar] = React.useState('🦁');
+  const [selectedAvatar] = React.useState('🦁');
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [isSigningIn, setIsSigningIn] = React.useState(false);
+
+  React.useEffect(() => {
+    hydrateSettingsStore().catch(() => undefined);
+  }, []);
 
   const handleGoogleLogin = async (targetScreen: 'home' | 'profile' = 'home') => {
     if (isSigningIn) {

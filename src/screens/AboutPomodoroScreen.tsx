@@ -10,7 +10,8 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon } from '../components/Icons/AppIcons';
-import { BRAND } from '../utils/brand';
+import { BRAND, getThemeBrand } from '../utils/brand';
+import { useSettingsStore } from '../storage/settingsStore';
 
 type Props = {
   onBack?: () => void;
@@ -53,12 +54,14 @@ function BenefitCard({ title, description, borderColor }: BenefitCardProps) {
 
 export default function AboutPomodoroScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
+  const darkMode = useSettingsStore(state => state.darkMode);
+  const theme = React.useMemo(() => getThemeBrand(darkMode), [darkMode]);
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: theme.bgStart }]}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <LinearGradient
-        colors={[BRAND.bgStart, '#2D1B4D', BRAND.bgEnd]}
+        colors={[theme.bgStart, '#2D1B4D', theme.bgEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={StyleSheet.absoluteFillObject}

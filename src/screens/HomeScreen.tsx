@@ -7,9 +7,11 @@ import {
   Image,
   StatusBar,
   Modal,
+  Alert,
   Pressable,
   TextInput,
   FlatList,
+  Vibration,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
@@ -24,15 +26,17 @@ import {
   AnalyticsIcon,
   PauseIcon,
   PlayIcon,
+  RestartIcon,
   SettingsIcon,
+  StopIcon,
   TagIcon,
 } from '../components/Icons/AppIcons';
-import { BRAND } from '../utils/brand';
+import { getThemeBrand } from '../utils/brand';
+import { useSettingsStore } from '../storage/settingsStore';
 
 const PURPLE = '#7F5AF0';
 const PINK = '#C084FC';
 const ORANGE = '#FF8A5B';
-const FOCUS_DURATION_SECONDS = 25 * 60;
 
 const RING_PX = 248;
 const RADIUS = 46;
@@ -40,6 +44,15 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const TAG_STORAGE_KEY = 'focusflow.tags';
 const SELECTED_TAG_STORAGE_KEY = 'focusflow.selectedTag';
 const MAX_TAGS = 12;
+
+type SessionType = 'focus' | 'shortBreak' | 'longBreak';
+type CompletionKind = 'focus' | 'break';
+
+const SESSION_LABELS: Record<SessionType, string> = {
+  focus: 'FOCUS',
+  shortBreak: 'SHORT BREAK',
+  longBreak: 'LONG BREAK',
+};
 
 type Tag = {
   id: string;
@@ -72,8 +85,44 @@ export default function HomeScreen({
   onSettingsPress,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [remainingSeconds, setRemainingSeconds] = React.useState(FOCUS_DURATION_SECONDS);
+  const endAtRef = React.useRef<number | null>(null);
+  const {
+    focusDuration,
+    shortBreak,
+    longBreak,
+    cycles,
+    timerSound,
+    notifications,
+    darkMode,
+  } = useSettingsStore();
+  const theme = React.useMemo(() => getThemeBrand(darkMode), [darkMode]);
+
+  const getDurationMsBySessionType = React.useCallback(
+    (type: SessionType) => {
+      if (type === 'focus') {
+        return focusDuration * 60 * 1000;
+      }
+
+      if (type === 'shortBreak') {
+        return shortBreak * 60 * 1000;
+      }
+
+      return longBreak * 60 * 1000;
+    },
+    [focusDuration, shortBreak, longBreak],
+  );
+
+  const [sessionDurationMs, setSessionDurationMs] = React.useState(() => focusDuration * 60 * 1000);
+  const [sessionType, setSessionType] = React.useState<SessionType>('focus');
+  const [remainingMs, setRemainingMs] = React.useState(() => focusDuration * 60 * 1000);
   const [isRunning, setIsRunning] = React.useState(false);
+  const [hasStarted, setHasStarted] = React.useState(false);
+  const [completedFocusCycles, setCompletedFocusCycles] = React.useState(0);
+  const [isCompletionModalVisible, setIsCompletionModalVisible] = React.useState(false);
+  const [completionKind, setCompletionKind] = React.useState<CompletionKind>('focus');
+  const [lastFocusSeconds, setLastFocusSeconds] = React.useState(() => focusDuration * 60);
+  const [lastCycleCompleted, setLastCycleCompleted] = React.useState(0);
+  const [lastCompletedBreakType, setLastCompletedBreakType] = React.useState<SessionType>('shortBreak');
   const [tags, setTags] = React.useState<Tag[]>(PRESET_TAGS);
   const [selectedTag, setSelectedTag] = React.useState<Tag | null>(PRESET_TAGS[0]);
   const [isTagModalVisible, setIsTagModalVisible] = React.useState(false);
@@ -82,26 +131,100 @@ export default function HomeScreen({
   const [customTagName, setCustomTagName] = React.useState('');
   const [customTagEmoji, setCustomTagEmoji] = React.useState('✨');
   const [tagLimitMessage, setTagLimitMessage] = React.useState('');
+  const remainingMsRef = React.useRef(remainingMs);
 
   React.useEffect(() => {
-    if (!isRunning || remainingSeconds <= 0) {
+    remainingMsRef.current = remainingMs;
+  }, [remainingMs]);
+
+  const notifySessionFinished = React.useCallback(
+    (finishedSession: SessionType) => {
+      if (timerSound) {
+        Vibration.vibrate(200);
+      }
+
+      if (!notifications) {
+        return;
+      }
+
+      const PushNotification = require('react-native-push-notification');
+      const title = finishedSession === 'focus' ? 'Focus Session Complete' : 'Break Complete';
+      const message =
+        finishedSession === 'focus'
+          ? 'Great work. Time to take a break.'
+          : 'Break finished. Ready for the next focus session?';
+
+      try {
+        PushNotification.localNotification({
+          title,
+          message,
+          playSound: timerSound,
+          soundName: 'default',
+        });
+      } catch {
+        // Ignore notification errors to keep timer flow uninterrupted.
+      }
+    },
+    [timerSound, notifications],
+  );
+
+  React.useEffect(() => {
+    if (isRunning || hasStarted || isCompletionModalVisible) {
       return;
     }
 
+    const nextDurationMs = getDurationMsBySessionType(sessionType);
+    setSessionDurationMs(nextDurationMs);
+    setRemainingMs(nextDurationMs);
+  }, [
+    focusDuration,
+    longBreak,
+    shortBreak,
+    getDurationMsBySessionType,
+    hasStarted,
+    isCompletionModalVisible,
+    isRunning,
+    sessionType,
+  ]);
+
+  React.useEffect(() => {
+    if (!isRunning || remainingMsRef.current <= 0) {
+      return;
+    }
+
+    endAtRef.current = Date.now() + remainingMsRef.current;
+
     const intervalId = setInterval(() => {
-      setRemainingSeconds(prev => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
+      const nextMs = Math.max(0, (endAtRef.current ?? Date.now()) - Date.now());
+      setRemainingMs(nextMs);
+
+      if (nextMs <= 0) {
+        endAtRef.current = null;
+        setIsRunning(false);
+
+        if (sessionType === 'focus') {
+          const completedCycle = completedFocusCycles + 1;
+          setCompletedFocusCycles(completedCycle);
+          setLastCycleCompleted(completedCycle);
+          setLastFocusSeconds(Math.round(sessionDurationMs / 1000));
+          setHasStarted(false);
+          setCompletionKind('focus');
+          setIsCompletionModalVisible(true);
+        } else {
+          setLastCompletedBreakType(sessionType);
+          setHasStarted(false);
+          setCompletionKind('break');
+          setIsCompletionModalVisible(true);
+        }
+
+        notifySessionFinished(sessionType);
+      }
+    }, 100);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [isRunning, remainingSeconds]);
-
-  React.useEffect(() => {
-    if (remainingSeconds === 0) {
-      setIsRunning(false);
-    }
-  }, [remainingSeconds]);
+  }, [isRunning, sessionType, completedFocusCycles, sessionDurationMs, notifySessionFinished]);
 
   React.useEffect(() => {
     const hydrateTagsAndSelection = async () => {
@@ -154,13 +277,140 @@ export default function HomeScreen({
     AsyncStorage.setItem(SELECTED_TAG_STORAGE_KEY, JSON.stringify(selectedTag)).catch(() => undefined);
   }, [selectedTag]);
 
-  const remainingProgress = remainingSeconds / FOCUS_DURATION_SECONDS;
+  const remainingSeconds = Math.ceil(remainingMs / 1000);
+  const remainingProgress = Math.max(0, Math.min(1, remainingMs / sessionDurationMs));
   const dashOffset = CIRCUMFERENCE * (1 - remainingProgress);
   const minutes = Math.floor(remainingSeconds / 60)
     .toString()
     .padStart(2, '0');
   const seconds = (remainingSeconds % 60).toString().padStart(2, '0');
   const timeLabel = `${minutes}:${seconds}`;
+
+  const formatSeconds = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60)
+      .toString()
+      .padStart(2, '0');
+    const secs = (totalSeconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+
+  const resetCurrentSession = (shouldRun = false) => {
+    const nextDurationMs = getDurationMsBySessionType(sessionType);
+    setSessionDurationMs(nextDurationMs);
+    setRemainingMs(nextDurationMs);
+    setHasStarted(shouldRun);
+    setIsRunning(shouldRun);
+  };
+
+  const handlePlayPause = () => {
+    if (isRunning) {
+      setIsRunning(false);
+      return;
+    }
+
+    if (remainingMs <= 0) {
+      const nextDurationMs = getDurationMsBySessionType(sessionType);
+      setSessionDurationMs(nextDurationMs);
+      setRemainingMs(nextDurationMs);
+    }
+
+    setHasStarted(true);
+    setIsRunning(true);
+  };
+
+  const handleRestart = () => {
+    if (!hasStarted && !isRunning) {
+      return;
+    }
+
+    Alert.alert('Restart this session?', '', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Restart',
+        style: 'destructive',
+        onPress: () => {
+          resetCurrentSession(true);
+        },
+      },
+    ]);
+  };
+
+  const handleStop = () => {
+    if (!hasStarted && !isRunning) {
+      return;
+    }
+
+    Alert.alert('End current session?', '', [
+      { text: 'Resume Session', style: 'cancel' },
+      {
+        text: 'End Session',
+        style: 'destructive',
+        onPress: () => {
+          setIsRunning(false);
+          setHasStarted(false);
+          setSessionType('focus');
+          const focusDurationMs = getDurationMsBySessionType('focus');
+          setSessionDurationMs(focusDurationMs);
+          setRemainingMs(focusDurationMs);
+          setIsCompletionModalVisible(false);
+        },
+      },
+    ]);
+  };
+
+  const handleStartBreak = () => {
+    const nextBreakType: SessionType =
+      lastCycleCompleted > 0 && lastCycleCompleted % cycles === 0 ? 'longBreak' : 'shortBreak';
+
+    const nextDurationMs = getDurationMsBySessionType(nextBreakType);
+
+    setSessionType(nextBreakType);
+    setSessionDurationMs(nextDurationMs);
+    setRemainingMs(nextDurationMs);
+    setCompletionKind('focus');
+    setIsCompletionModalVisible(false);
+    setHasStarted(true);
+    setIsRunning(true);
+  };
+
+  const getBreakButtonText = () => {
+    const nextBreakType: SessionType =
+      lastCycleCompleted > 0 && lastCycleCompleted % cycles === 0 ? 'longBreak' : 'shortBreak';
+    return nextBreakType === 'longBreak' ? 'Start Long Break →' : 'Start Short Break →';
+  };
+
+  const handleSkipBreakAndStartFocus = () => {
+    const focusDurationMs = getDurationMsBySessionType('focus');
+    setSessionType('focus');
+    setSessionDurationMs(focusDurationMs);
+    setRemainingMs(focusDurationMs);
+    setCompletionKind('focus');
+    setIsCompletionModalVisible(false);
+    setHasStarted(true);
+    setIsRunning(true);
+  };
+
+  const handleStartNextFocusSession = () => {
+    const focusDurationMs = getDurationMsBySessionType('focus');
+    setSessionType('focus');
+    setSessionDurationMs(focusDurationMs);
+    setRemainingMs(focusDurationMs);
+    setCompletionKind('focus');
+    setIsCompletionModalVisible(false);
+    setHasStarted(true);
+    setIsRunning(true);
+  };
+
+  const handleKeepTimerIdle = () => {
+    const focusDurationMs = getDurationMsBySessionType('focus');
+    setSessionType('focus');
+    setSessionDurationMs(focusDurationMs);
+    setRemainingMs(focusDurationMs);
+    setCompletionKind('focus');
+    setIsCompletionModalVisible(false);
+    setHasStarted(false);
+    setIsRunning(false);
+  };
 
   const closeTagModal = () => {
     setIsTagModalVisible(false);
@@ -233,7 +483,7 @@ export default function HomeScreen({
     <View style={s.root}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <LinearGradient
-        colors={[BRAND.bgStart, BRAND.bgEnd]}
+        colors={[theme.bgStart, theme.bgEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
@@ -305,7 +555,7 @@ export default function HomeScreen({
 
             <View style={s.timerInner}>
               <Text style={s.timerTime}>{timeLabel}</Text>
-              <Text style={s.timerMode}>FOCUS</Text>
+              <Text style={s.timerMode}>{SESSION_LABELS[sessionType]}</Text>
             </View>
           </View>
         </View>
@@ -330,28 +580,139 @@ export default function HomeScreen({
           </View>
         </View>
 
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => {
-            if (remainingSeconds === 0) {
-              setRemainingSeconds(FOCUS_DURATION_SECONDS);
-              setIsRunning(true);
-              return;
-            }
-
-            setIsRunning(prev => !prev);
-          }}
-        >
-          <LinearGradient
-            colors={[PURPLE, PINK, ORANGE]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={s.playBtn}
+        <View style={s.controlsRow}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[s.sideControlBtn, !hasStarted && !isRunning && s.sideControlBtnDisabled]}
+            onPress={handleRestart}
+            disabled={!hasStarted && !isRunning}
           >
-            {isRunning ? <PauseIcon size={44} color="#fff" /> : <PlayIcon size={48} color="#fff" />}
-          </LinearGradient>
-        </TouchableOpacity>
+            <RestartIcon size={20} color="#fff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity activeOpacity={0.85} onPress={handlePlayPause}>
+            <LinearGradient
+              colors={[PURPLE, PINK, ORANGE]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.playBtn}
+            >
+              {isRunning ? <PauseIcon size={44} color="#fff" /> : <PlayIcon size={48} color="#fff" />}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[s.sideControlBtn, !hasStarted && !isRunning && s.sideControlBtnDisabled]}
+            onPress={handleStop}
+            disabled={!hasStarted && !isRunning}
+          >
+            <StopIcon size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <Modal
+        visible={isCompletionModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleKeepTimerIdle}
+      >
+        <View style={s.modalRoot}>
+          <Pressable style={s.modalBackdrop} onPress={handleKeepTimerIdle} />
+
+          <View style={s.modalCard}>
+            <View style={s.modalHandle} />
+            {completionKind === 'focus' ? (
+              <Text style={s.completionEmoji}>🎉 🥳</Text>
+            ) : (
+              <Text style={s.completionEmoji}>☕ ✅</Text>
+            )}
+
+            <Text style={s.modalTitle}>{completionKind === 'focus' ? 'Study Complete!' : 'Break Complete!'}</Text>
+
+            {completionKind === 'focus' ? (
+              <View style={s.completionPanel}>
+                <View style={s.completionRow}>
+                  <Text style={s.completionLabel}>Focus Time</Text>
+                  <Text style={s.completionValue}>{formatSeconds(lastFocusSeconds)}</Text>
+                </View>
+                <View style={s.completionDivider} />
+
+                <View style={s.completionRow}>
+                  <Text style={s.completionLabel}>Tag</Text>
+                  <Text style={s.completionValue}>{selectedTag ? `${selectedTag.emoji} ${selectedTag.name}` : 'None'}</Text>
+                </View>
+                <View style={s.completionDivider} />
+
+                <View style={s.completionRow}>
+                  <Text style={s.completionLabel}>Progress</Text>
+                  <Text style={s.completionValue}>Cycle {lastCycleCompleted} / {cycles}</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={s.completionPanel}>
+                <View style={s.completionRow}>
+                  <Text style={s.completionLabel}>Break Type</Text>
+                  <Text style={s.completionValue}>{SESSION_LABELS[lastCompletedBreakType]}</Text>
+                </View>
+                <View style={s.completionDivider} />
+
+                <View style={s.completionRow}>
+                  <Text style={s.completionLabel}>Next</Text>
+                  <Text style={s.completionValue}>Start Next Focus Session</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={s.completionActions}>
+              {completionKind === 'focus' ? (
+                <>
+                  <TouchableOpacity activeOpacity={0.9} style={s.saveButton} onPress={handleStartBreak}>
+                    <LinearGradient
+                      colors={[PURPLE, PINK, ORANGE]}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={s.saveButtonGradient}
+                    >
+                      <Text style={s.saveButtonText}>{getBreakButtonText()}</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={s.skipBreakButton}
+                    onPress={handleSkipBreakAndStartFocus}
+                  >
+                    <Text style={s.skipBreakText}>Skip Break and Start Next Focus Session</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity activeOpacity={0.9} style={s.saveButton} onPress={handleStartNextFocusSession}>
+                    <LinearGradient
+                      colors={[PURPLE, PINK, ORANGE]}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={s.saveButtonGradient}
+                    >
+                      <Text style={s.saveButtonText}>Start Next Focus Session →</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={s.skipBreakButton}
+                    onPress={handleKeepTimerIdle}
+                  >
+                    <Text style={s.skipBreakText}>Not Now</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={isTagModalVisible}
@@ -638,6 +999,84 @@ const s = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 20,
   },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  sideControlBtn: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: PINK,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  sideControlBtnDisabled: {
+    opacity: 0.45,
+  },
+  completionActions: {
+    marginTop: 20,
+    gap: 12,
+  },
+  completionEmoji: {
+    textAlign: 'center',
+    fontSize: 32,
+    marginBottom: 6,
+  },
+  completionPanel: {
+    marginTop: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  completionRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+  completionLabel: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  completionValue: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  completionDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  skipBreakButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  skipBreakText: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 
   modalRoot: {
     flex: 1,
@@ -649,14 +1088,14 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.62)',
   },
   modalCard: {
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 18,
+    borderRadius: 34,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 20,
     maxHeight: '82%',
-    backgroundColor: 'rgba(30, 15, 60, 0.9)',
+    backgroundColor: 'rgba(30, 15, 60, 0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   modalHandle: {
     alignSelf: 'center',
@@ -669,8 +1108,9 @@ const s = StyleSheet.create({
   modalTitle: {
     color: '#fff',
     textAlign: 'center',
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: '700',
+    letterSpacing: -0.4,
   },
   modalSubtitle: {
     marginTop: 2,
