@@ -67,12 +67,14 @@ export default function AboutPomodoroScreen({ onBack }: Props) {
         style={StyleSheet.absoluteFillObject}
       />
 
-      <View style={[s.headerWrap, { paddingTop: insets.top + 10 }]}> 
+      <View style={[s.headerWrap, { paddingTop: insets.top + 10 }]}>
         <View style={s.headerRow}>
           <Pressable
             style={s.backButton}
             onPress={onBack}
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
             <BackIcon size={22} color="#fff" />
           </Pressable>
@@ -102,7 +104,7 @@ export default function AboutPomodoroScreen({ onBack }: Props) {
           />
           <StepCard
             title="2. Set Your Timer"
-            description="Start a 25 minute focus session (one Pomodoro)."
+            description="Start a 25-minute focus session (one Pomodoro)."
             accentColor="#C084FC"
           />
           <StepCard
@@ -117,7 +119,7 @@ export default function AboutPomodoroScreen({ onBack }: Props) {
           />
           <StepCard
             title="5. Repeat and Recharge"
-            description="After four Pomodoros, take a longer 15 to 30 minute break."
+            description="After four Pomodoros, take a longer 15- to 30-minute break."
             accentColor="#C084FC"
           />
         </View>
