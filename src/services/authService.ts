@@ -7,8 +7,29 @@ GoogleSignin.configure({
   offlineAccess: false,
 });
 
+const readIdTokenFromSignInResult = (value: unknown): string | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const direct = (value as { idToken?: unknown }).idToken;
+  if (typeof direct === 'string' && direct.length > 0) {
+    return direct;
+  }
+
+  const data = (value as { data?: { idToken?: unknown } }).data;
+  if (data && typeof data.idToken === 'string' && data.idToken.length > 0) {
+    return data.idToken;
+  }
+
+  return null;
+};
+
 export async function signInWithGoogle() {
-  const googleApi = GoogleSignin as any;
+  const googleApi = GoogleSignin as {
+    hasPlayServices?: (options?: { showPlayServicesUpdateDialog?: boolean }) => Promise<unknown>;
+    signIn?: () => Promise<unknown>;
+  };
   if (typeof googleApi.hasPlayServices === 'function') {
     await googleApi.hasPlayServices({ showPlayServicesUpdateDialog: true });
   }
@@ -17,15 +38,16 @@ export async function signInWithGoogle() {
     throw new Error('Google Sign-In is not available on this build. Rebuild the app and try again.');
   }
 
-  const signInResult: any = await googleApi.signIn();
-  const idToken: string | null =
-    signInResult?.data?.idToken ?? signInResult?.idToken ?? null;
+  const signInResult = await googleApi.signIn();
+  const idToken = readIdTokenFromSignInResult(signInResult);
 
   if (!idToken) {
     throw new Error('Google Sign-In did not return an idToken.');
   }
 
-  const authModule = auth as any;
+  const authModule = auth as unknown as {
+    GoogleAuthProvider?: { credential?: (token: string) => unknown };
+  };
   const credentialFactory = authModule.GoogleAuthProvider?.credential;
   if (typeof credentialFactory !== 'function') {
     throw new Error('Firebase Google auth is not configured correctly.');
