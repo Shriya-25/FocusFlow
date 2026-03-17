@@ -10,6 +10,12 @@ export type DailyGoalProgress = {
   lastUpdatedDate: string;
 };
 
+const createDefaultDailyGoalProgress = (): DailyGoalProgress => ({
+  dailyGoal: DEFAULT_DAILY_GOAL,
+  sessionsCompletedToday: 0,
+  lastUpdatedDate: toDateKey(),
+});
+
 const toDateKey = (value: Date | number = Date.now()) => {
   const date = new Date(value);
   const year = date.getFullYear();
@@ -22,11 +28,7 @@ const normalizeDailyGoalProgress = (input: unknown): DailyGoalProgress => {
   const todayKey = toDateKey();
 
   if (!input || typeof input !== 'object') {
-    return {
-      dailyGoal: DEFAULT_DAILY_GOAL,
-      sessionsCompletedToday: 0,
-      lastUpdatedDate: todayKey,
-    };
+    return createDefaultDailyGoalProgress();
   }
 
   const candidate = input as Partial<DailyGoalProgress>;
@@ -66,11 +68,7 @@ export const readDailyGoalProgress = async (): Promise<DailyGoalProgress> => {
     await persistDailyGoalProgress(normalized);
     return normalized;
   } catch {
-    return {
-      dailyGoal: DEFAULT_DAILY_GOAL,
-      sessionsCompletedToday: 0,
-      lastUpdatedDate: toDateKey(),
-    };
+    return createDefaultDailyGoalProgress();
   }
 };
 
@@ -92,11 +90,7 @@ export const syncDailyGoalProgress = async (): Promise<DailyGoalProgress> => {
     await persistDailyGoalProgress(resetProgress);
     return resetProgress;
   } catch {
-    return {
-      dailyGoal: DEFAULT_DAILY_GOAL,
-      sessionsCompletedToday: 0,
-      lastUpdatedDate: toDateKey(),
-    };
+    return createDefaultDailyGoalProgress();
   }
 };
 
@@ -112,10 +106,6 @@ export const incrementDailyGoalSessions = async (): Promise<DailyGoalProgress> =
     await persistDailyGoalProgress(nextProgress);
     return nextProgress;
   } catch {
-    return {
-      dailyGoal: DEFAULT_DAILY_GOAL,
-      sessionsCompletedToday: 0,
-      lastUpdatedDate: toDateKey(),
-    };
+    return createDefaultDailyGoalProgress();
   }
 };
