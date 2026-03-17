@@ -30,8 +30,7 @@ build/
 local.properties
 
 # Firebase config (contains sensitive API keys - keep out of version control)
-google-services.json
-google-services\ (2).json
+**/google-services*.json
 *.iml
 *.hprof
 .cxx/
