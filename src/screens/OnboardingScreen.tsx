@@ -253,17 +253,23 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
       <View style={styles.blurCircleBottom} />
 
       <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 10) + 6 }]}>
-        <TouchableOpacity onPress={handleBack} disabled={currentScreen === 0}>
-          <Text style={[styles.topActionText, currentScreen === 0 && styles.topActionMuted]}>
-            Back
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.topActionSlot}>
+          {currentScreen > 0 ? (
+            <TouchableOpacity onPress={handleBack}>
+              <Text style={styles.topActionText}>Back</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         <Text style={styles.brandTitle}>FocusFlow</Text>
 
-        <TouchableOpacity onPress={handleSkip}>
-          <Text style={styles.topActionText}>Skip</Text>
-        </TouchableOpacity>
+        <View style={styles.topActionSlot}>
+          {currentScreen < screens.length - 1 ? (
+            <TouchableOpacity onPress={handleSkip}>
+              <Text style={[styles.topActionText, styles.topActionRight]}>Skip</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       <Animated.View
@@ -349,8 +355,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 36,
   },
-  topActionMuted: {
-    opacity: 0.25,
+  topActionSlot: {
+    width: 52,
+    minHeight: 24,
+    justifyContent: 'center',
+  },
+  topActionRight: {
+    textAlign: 'right',
   },
   brandTitle: {
     color: '#FFFFFF',
