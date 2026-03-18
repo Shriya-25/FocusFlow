@@ -538,6 +538,10 @@ export default function StatisticsScreen({
   }, [isGuestUser]);
 
   const analytics = React.useMemo(() => computeAnalytics(history), [history]);
+  const hasHeatmapData = React.useMemo(
+    () => analytics.heatmap.some(row => row.some(cell => cell > 0)),
+    [analytics.heatmap],
+  );
 
   return (
     <View style={[s.root, { backgroundColor: theme.bgStart }]}>
@@ -609,6 +613,9 @@ export default function StatisticsScreen({
             <View style={s.sectionWrap}>
               <Text style={s.sectionTitle}>Focus Intensity Heatmap</Text>
               <HeatmapCard heatmap={analytics.heatmap} />
+              {!hasHeatmapData ? (
+                <Text style={s.heatmapEmptyHint}>No focus sessions yet. Complete a session to light this up.</Text>
+              ) : null}
             </View>
 
             <View style={s.sectionWrap}>
@@ -757,6 +764,12 @@ const s = StyleSheet.create({
     fontSize: 19,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  heatmapEmptyHint: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 13,
+    lineHeight: 18,
   },
   glassCard: {
     borderRadius: 20,
