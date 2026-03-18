@@ -132,6 +132,7 @@ export default function HomeScreen({
   const [hasStarted, setHasStarted] = React.useState(false);
   const [completedFocusCycles, setCompletedFocusCycles] = React.useState(0);
   const [isCompletionModalVisible, setIsCompletionModalVisible] = React.useState(false);
+  const [isEndSessionModalVisible, setIsEndSessionModalVisible] = React.useState(false);
   const [completionKind, setCompletionKind] = React.useState<CompletionKind>('focus');
   const [lastFocusSeconds, setLastFocusSeconds] = React.useState(() => focusDuration * 60);
   const [lastCycleCompleted, setLastCycleCompleted] = React.useState(0);
@@ -439,16 +440,16 @@ export default function HomeScreen({
       return;
     }
 
-    Alert.alert('End current session?', '', [
-      { text: 'Resume Session', style: 'cancel' },
-      {
-        text: 'End Session',
-        style: 'destructive',
-        onPress: () => {
-          completeCurrentSession(sessionType, remainingMsRef.current);
-        },
-      },
-    ]);
+    setIsEndSessionModalVisible(true);
+  };
+
+  const closeEndSessionModal = () => {
+    setIsEndSessionModalVisible(false);
+  };
+
+  const handleConfirmEndSession = () => {
+    setIsEndSessionModalVisible(false);
+    completeCurrentSession(sessionType, remainingMsRef.current);
   };
 
   const handleStartBreak = () => {
@@ -714,6 +715,48 @@ export default function HomeScreen({
       </View>
 
       <Modal
+        visible={isEndSessionModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeEndSessionModal}
+      >
+        <View style={s.modalRoot}>
+          <Pressable style={s.modalBackdrop} onPress={closeEndSessionModal} />
+
+          <View style={[s.modalCard, s.endSessionModalCard]}>
+            <View style={s.modalHandle} />
+            <Text style={s.endSessionTitle}>{sessionType === 'focus' ? 'End current session?' : 'End this break?'}</Text>
+            <Text style={s.endSessionSubtitle}>
+              {sessionType === 'focus'
+                ? 'You can start a new focus session whenever you are ready.'
+                : 'You can jump back into your next focus session anytime.'}
+            </Text>
+
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={s.cancelButton}
+                onPress={closeEndSessionModal}
+              >
+                <Text style={s.cancelButtonText}>{sessionType === 'focus' ? 'Resume Session' : 'Resume Break'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.9} style={s.saveButton} onPress={handleConfirmEndSession}>
+                <LinearGradient
+                  colors={[PURPLE, PINK, ORANGE]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={s.saveButtonGradient}
+                >
+                  <Text style={s.saveButtonText}>{sessionType === 'focus' ? 'End Session' : 'End Break'}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={isCompletionModalVisible}
         transparent
         animationType="fade"
@@ -724,11 +767,6 @@ export default function HomeScreen({
 
           <View style={s.modalCard}>
             <View style={s.modalHandle} />
-            {completionKind === 'focus' ? (
-              <Text style={s.completionEmoji}>🎉 🥳</Text>
-            ) : (
-              <Text style={s.completionEmoji}>☕ ✅</Text>
-            )}
 
             <Text style={s.modalTitle}>{completionKind === 'focus' ? 'Study Complete!' : 'Break Complete!'}</Text>
 
@@ -1137,10 +1175,22 @@ const s = StyleSheet.create({
     marginTop: 20,
     gap: 12,
   },
-  completionEmoji: {
+  endSessionModalCard: {
+    maxHeight: undefined,
+  },
+  endSessionTitle: {
+    color: '#fff',
     textAlign: 'center',
-    fontSize: 32,
-    marginBottom: 6,
+    fontSize: 26,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  endSessionSubtitle: {
+    marginTop: 8,
+    color: 'rgba(255,255,255,0.65)',
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
   },
   completionPanel: {
     marginTop: 16,
