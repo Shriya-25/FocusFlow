@@ -222,8 +222,6 @@ export default function SettingsScreen({ onBack, onAboutPomodoroPress }: Props) 
             <ToggleRow label="Timer sound" value={timerSound} onToggle={() => updateSettings({ timerSound: !timerSound })} />
             <View style={s.rowDivider} />
             <ToggleRow label="Notifications" value={notifications} onToggle={() => updateSettings({ notifications: !notifications })} />
-            <View style={s.rowDivider} />
-            <ToggleRow label="Dark mode" value={darkMode} onToggle={() => updateSettings({ darkMode: !darkMode })} />
           </View>
         </View>
 

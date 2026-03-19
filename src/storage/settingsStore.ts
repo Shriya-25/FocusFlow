@@ -63,7 +63,7 @@ const sanitizeSettings = (
     cycles,
     timerSound: Boolean(merged.timerSound),
     notifications: Boolean(merged.notifications),
-    darkMode: Boolean(merged.darkMode),
+    darkMode: true,
   };
 };
 
