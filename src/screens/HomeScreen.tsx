@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Animated,
   Image,
   StatusBar,
   Modal,
@@ -86,6 +87,51 @@ type Props = {
   onStatisticsPress?: () => void;
   onSettingsPress?: () => void;
 };
+
+// ── Side control button (Reset / Stop) with press scale animation ──────────
+type ControlSideButtonProps = {
+  onPress: () => void;
+  disabled?: boolean;
+  tint: 'purple' | 'red';
+  children: React.ReactNode;
+};
+
+function ControlSideButton({ onPress, disabled, tint, children }: ControlSideButtonProps) {
+  const scale = React.useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () =>
+    Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+  const onPressOut = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+
+  const bgColor = tint === 'red' ? 'rgba(255,80,80,0.12)' : 'rgba(127,90,240,0.14)';
+  const borderColor = tint === 'red' ? 'rgba(255,100,100,0.28)' : 'rgba(127,90,240,0.28)';
+
+  return (
+    <Animated.View style={{ transform: [{ scale }], opacity: disabled ? 0.38 : 1 }}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        disabled={disabled}
+        style={{
+          width: 60,
+          height: 60,
+          borderRadius: 30,
+          backgroundColor: bgColor,
+          borderWidth: 1,
+          borderColor,
+          alignItems: 'center',
+          justifyContent: 'center',
+          elevation: 3,
+        }}
+      >
+        {children}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export default function HomeScreen({
   userName = 'User',
@@ -683,34 +729,41 @@ export default function HomeScreen({
         </View>
 
         <View style={s.controlsRow}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[s.sideControlBtn, !hasStarted && !isRunning && s.sideControlBtnDisabled]}
+          {/* Reset button */}
+          <ControlSideButton
             onPress={handleRestart}
             disabled={!hasStarted && !isRunning}
+            tint="purple"
           >
-            <RestartIcon size={20} color="#fff" />
-          </TouchableOpacity>
+            <RestartIcon size={22} color="#fff" />
+          </ControlSideButton>
 
-          <TouchableOpacity activeOpacity={0.85} onPress={handlePlayPause} style={s.playBtnWrap}>
-            <LinearGradient
-              colors={[PURPLE, PINK, ORANGE]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={s.playBtn}
+          {/* Play / Pause button */}
+          <View style={s.playBtnWrap}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={handlePlayPause}
+              style={{ width: 90, height: 90, borderRadius: 45, overflow: 'hidden' }}
             >
-              {isRunning ? <PauseIcon size={44} color="#fff" /> : <PlayIcon size={48} color="#fff" />}
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={[PURPLE, PINK, ORANGE]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={s.playBtn}
+              >
+                {isRunning ? <PauseIcon size={44} color="#fff" /> : <PlayIcon size={48} color="#fff" />}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[s.sideControlBtn, !hasStarted && !isRunning && s.sideControlBtnDisabled]}
+          {/* Stop button */}
+          <ControlSideButton
             onPress={handleStop}
             disabled={!hasStarted && !isRunning}
+            tint="purple"
           >
-            <StopIcon size={18} color="#fff" />
-          </TouchableOpacity>
+            <StopIcon size={20} color="#fff" />
+          </ControlSideButton>
         </View>
       </View>
 
@@ -1133,15 +1186,15 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 12,
+    elevation: 16,
     shadowColor: PINK,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
   },
   playBtn: {
-    width: '100%',
-    height: '100%',
+    width: 90,
+    height: 90,
     borderRadius: 45,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1150,26 +1203,18 @@ const s = StyleSheet.create({
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
+    justifyContent: 'center',
+    gap: 24,
   },
   sideControlBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: PINK,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
-    elevation: 4,
   },
   sideControlBtnDisabled: {
-    opacity: 0.45,
+    opacity: 0.38,
   },
   completionActions: {
     marginTop: 20,
