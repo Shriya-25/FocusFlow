@@ -1,7 +1,10 @@
 const Sound = require('react-native-sound') as any;
 
-const REMOTE_BELL_URL =
-  'https://freesound.org/people/LegitCheese/sounds/571513/download/571513__legitcheese__soft-notifications-bell-ding-dong.mp3';
+// Bell sound is bundled locally.
+// Android: add bell.mp3 to  android/app/src/main/res/raw/bell.mp3
+// iOS:     add bell.mp3 to  ios/FocusFlow/bell.mp3  (check "Copy items if needed")
+const SOUND_FILE = 'bell.mp3';
+const SOUND_BASE = Sound.MAIN_BUNDLE;
 
 let isConfigured = false;
 
@@ -21,7 +24,7 @@ const configureSoundCategory = () => {
 
 const loadSoundFromUrl = () => {
   return new Promise<any>((resolve, reject) => {
-    const sound = new Sound(REMOTE_BELL_URL, '', (error: unknown) => {
+    const sound = new Sound(SOUND_FILE, SOUND_BASE, (error: unknown) => {
       if (error) {
         reject(error);
         return;

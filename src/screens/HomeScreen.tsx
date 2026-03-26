@@ -8,7 +8,6 @@ import {
   Image,
   StatusBar,
   Modal,
-  Alert,
   Pressable,
   TextInput,
   FlatList,
@@ -184,6 +183,7 @@ export default function HomeScreen({
   } = useTimerContext();
   const [isCompletionModalVisible, setIsCompletionModalVisible] = React.useState(false);
   const [isEndSessionModalVisible, setIsEndSessionModalVisible] = React.useState(false);
+  const [isRestartModalVisible, setIsRestartModalVisible] = React.useState(false);
   const [completionKind, setCompletionKind] = React.useState<CompletionKind>('focus');
   const [lastFocusSeconds, setLastFocusSeconds] = React.useState(() => focusDuration * 60);
   const [lastCycleCompleted, setLastCycleCompleted] = React.useState(0);
@@ -491,24 +491,25 @@ export default function HomeScreen({
     if (!hasStarted && !isRunning) {
       return;
     }
+    setIsRestartModalVisible(true);
+  };
 
-    Alert.alert('Restart this session?', '', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Restart',
-        style: 'destructive',
-        onPress: () => {
-          resetCurrentSession(true);
-        },
-      },
-    ]);
+  const closeRestartModal = () => setIsRestartModalVisible(false);
+
+  const handleConfirmRestart = () => {
+    setIsRestartModalVisible(false);
+    resetCurrentSession(true);
   };
 
   const handleStop = () => {
     if (!hasStarted && !isRunning) {
       return;
     }
-
+    // Guard: if the timer already completed naturally and the completion modal is
+    // open, do not layer a second modal on top.
+    if (isCompletionModalVisible) {
+      return;
+    }
     setIsEndSessionModalVisible(true);
   };
 
@@ -518,7 +519,12 @@ export default function HomeScreen({
 
   const handleConfirmEndSession = () => {
     setIsEndSessionModalVisible(false);
-    completeCurrentSession(sessionType, remainingMsRef.current);
+    // Use the live remaining time derived from endAtRef for accuracy (avoids
+    // up-to-100ms stale value from the last interval tick stored in remainingMsRef).
+    const accurateRemainingMs = endAtRef.current
+      ? Math.max(0, endAtRef.current - Date.now())
+      : remainingMsRef.current;
+    completeCurrentSession(sessionType, accurateRemainingMs);
   };
 
   const handleStartBreak = () => {
@@ -789,6 +795,43 @@ export default function HomeScreen({
           </ControlSideButton>
         </View>
       </View>
+
+      <Modal
+        visible={isRestartModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeRestartModal}
+      >
+        <View style={s.modalRoot}>
+          <Pressable style={s.modalBackdrop} onPress={closeRestartModal} />
+          <View style={[s.modalCard, s.endSessionModalCard]}>
+            <View style={s.modalHandle} />
+            <Text style={s.endSessionTitle}>Restart this session?</Text>
+            <Text style={s.endSessionSubtitle}>
+              Your current progress will be lost and the timer will restart from the beginning.
+            </Text>
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={s.cancelButton}
+                onPress={closeRestartModal}
+              >
+                <Text style={s.cancelButtonText}>Keep Going</Text>
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.9} style={s.saveButton} onPress={handleConfirmRestart}>
+                <LinearGradient
+                  colors={[PURPLE, PINK, ORANGE]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={s.saveButtonGradient}
+                >
+                  <Text style={s.saveButtonText}>Restart</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={isEndSessionModalVisible}

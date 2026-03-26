@@ -6,6 +6,7 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  ActivityIndicator,
   Alert,
   BackHandler,
   Modal,
@@ -120,15 +121,22 @@ function App() {
     [],
   );
 
+  // Replace-style navigation: clears the history stack so the user can never
+  // back-navigate to the login or onboarding screens after authenticating.
+  const replaceScreen = React.useCallback((newScreen: Screen) => {
+    screenHistoryRef.current = [];
+    setScreen(newScreen);
+  }, []);
+
   const finalizeSignIn = React.useCallback(
     (name: string, photo: string | null, targetScreen: 'home' | 'profile') => {
       setUserName(name);
       setUserPhoto(photo);
       setIsAuthenticated(true);
       saveSession(name, photo, true);
-      navigateTo(targetScreen);
+      replaceScreen(targetScreen);
     },
-    [navigateTo, saveSession],
+    [replaceScreen, saveSession],
   );
 
   const handleGoogleLogin = async (targetScreen: 'home' | 'profile' = 'home') => {
@@ -163,7 +171,7 @@ function App() {
     setUserPhoto(null);
     setIsAuthenticated(false);
     saveSession('Guest', null, false);
-    navigateTo('home');
+    replaceScreen('home');
   };
 
   const handleImportStartFresh = () => {
@@ -176,7 +184,18 @@ function App() {
     importGuestSessionHistory().catch(() => undefined);
   };
 
-  if (!isReady) return null;
+  if (!isReady) {
+    return (
+      <LinearGradient
+        colors={['#0f0c29', '#302b63']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <ActivityIndicator size="large" color="#7F5AF0" />
+      </LinearGradient>
+    );
+  }
 
   return (
     <TimerProvider>
