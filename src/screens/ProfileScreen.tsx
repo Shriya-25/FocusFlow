@@ -14,13 +14,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackIcon, CrownIcon, InfoIcon } from '../components/Icons/AppIcons';
 import { BRAND, getThemeBrand } from '../utils/brand';
 import { useSettingsStore } from '../storage/settingsStore';
+import { readSessionHistory } from '../storage/sessionHistory';
 
 const PURPLE = BRAND.violet;
 const PINK = BRAND.magenta;
 const ORANGE = BRAND.peach;
 
 const TOTAL_REQUIRED_POMODOROS = 300;
-const COMPLETED_POMODOROS = 12;
+
+const toDateKey = (ms: number): string => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const formatFocusTime = (totalMinutes: number): string => {
+  if (totalMinutes < 60) return `${totalMinutes} Min`;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h} ${h === 1 ? 'Hour' : 'Hours'}`;
+};
 const QUOTE_ROTATION: string[] = [
   'The secret of getting ahead is getting started.',
   'Success is the sum of small efforts repeated day in and day out.',
@@ -57,21 +69,51 @@ export default function ProfileScreen({
   const theme = useMemo(() => getThemeBrand(darkMode), [darkMode]);
   const [nowMs, setNowMs] = React.useState(Date.now());
 
+  const [userStats, setUserStats] = React.useState({
+    totalFocusMinutes: 0,
+    currentStreak: 0,
+    completedPomodoros: 0,
+  });
+
   React.useEffect(() => {
     const intervalId = setInterval(() => {
       setNowMs(Date.now());
     }, 60 * 1000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
+    return () => clearInterval(intervalId);
   }, []);
 
+  // Load real session data
+  React.useEffect(() => {
+    const audience = isGuest ? 'guest' : 'account';
+    readSessionHistory(audience).then(entries => {
+      const focusSessions = entries.filter(e => e.sessionType === 'focus');
+      const totalMinutes = Math.round(
+        focusSessions.reduce((sum, e) => sum + e.durationSeconds, 0) / 60,
+      );
+      const completedPomodoros = focusSessions.length;
+
+      // Current streak: count consecutive days (incl. today) with focus sessions
+      const daySet = new Set(focusSessions.map(e => toDateKey(e.completedAt)));
+      let streak = 0;
+      for (let i = 0; i < 365; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        if (daySet.has(toDateKey(d.getTime()))) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+
+      setUserStats({ totalFocusMinutes: totalMinutes, currentStreak: streak, completedPomodoros });
+    }).catch(() => {});
+  }, [isGuest]);
+
   const progressPercent = useMemo(
-    () => Math.round((COMPLETED_POMODOROS / TOTAL_REQUIRED_POMODOROS) * 100),
-    [],
+    () => Math.min(100, Math.round((userStats.completedPomodoros / TOTAL_REQUIRED_POMODOROS) * 100)),
+    [userStats.completedPomodoros],
   );
-  const remainingPomodoros = TOTAL_REQUIRED_POMODOROS - COMPLETED_POMODOROS;
+  const remainingPomodoros = Math.max(0, TOTAL_REQUIRED_POMODOROS - userStats.completedPomodoros);
   const quoteOfTheSlot = useMemo(() => {
     const now = new Date(nowMs);
     const slot = Math.floor(now.getHours() / 8);
@@ -150,11 +192,19 @@ export default function ProfileScreen({
         <View style={s.statsRow}>
           <View style={s.glassCardHalf}>
             <Text style={s.statLabel}>TOTAL FOCUS TIME</Text>
-            <Text style={s.statValue}>{isGuest ? '' : '120 Hours'}</Text>
+            <Text style={s.statValue}>
+              {isGuest && userStats.totalFocusMinutes === 0
+                ? '–'
+                : formatFocusTime(userStats.totalFocusMinutes)}
+            </Text>
           </View>
           <View style={s.glassCardHalf}>
             <Text style={s.statLabel}>CURRENT STREAK</Text>
-            <Text style={s.statValue}>{isGuest ? '' : '5 Days'}</Text>
+            <Text style={s.statValue}>
+              {userStats.currentStreak === 0
+                ? '–'
+                : `${userStats.currentStreak} ${userStats.currentStreak === 1 ? 'Day' : 'Days'}`}
+            </Text>
           </View>
         </View>
 
@@ -163,7 +213,9 @@ export default function ProfileScreen({
             <View>
               <Text style={s.badgeTitle}>Gold Focus Badge</Text>
               <Text style={s.badgeSubtitle}>
-                {isGuest ? 'Sign in to view badge progress' : `${COMPLETED_POMODOROS} Pomodoros Completed`}
+                {isGuest && userStats.completedPomodoros === 0
+                  ? 'Sign in to sync your progress'
+                  : `${userStats.completedPomodoros} Pomodoros Completed`}
               </Text>
             </View>
             <View style={s.badgeIconWrap}>
