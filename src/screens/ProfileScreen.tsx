@@ -52,6 +52,7 @@ type Props = {
   isGuest?: boolean;
   isSigningIn?: boolean;
   onGuestSignIn?: () => void;
+  onSignOut?: () => void;
   onBack?: () => void;
 };
 
@@ -62,6 +63,7 @@ export default function ProfileScreen({
   isGuest = false,
   isSigningIn = false,
   onGuestSignIn,
+  onSignOut,
   onBack,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -261,6 +263,18 @@ export default function ProfileScreen({
             <Text style={s.quoteText}>"{quoteOfTheSlot}"</Text>
           </LinearGradient>
         </View>
+
+        <View style={s.bottomPad} />
+
+        {!isGuest && onSignOut ? (
+          <Pressable
+            style={s.signOutButton}
+            onPress={onSignOut}
+            android_ripple={{ color: 'rgba(255,80,80,0.15)' }}
+          >
+            <Text style={s.signOutText}>Sign Out</Text>
+          </Pressable>
+        ) : null}
 
         <View style={s.bottomPad} />
       </ScrollView>
@@ -521,5 +535,23 @@ const s = StyleSheet.create({
 
   bottomPad: {
     height: 24,
+  },
+
+  signOutButton: {
+    marginHorizontal: 24,
+    marginBottom: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,80,80,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,100,100,0.25)',
+  },
+  signOutText: {
+    color: '#FF6B6B',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });

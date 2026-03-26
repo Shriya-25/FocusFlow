@@ -175,6 +175,21 @@ function App() {
     clearGuestSessionHistory().catch(() => undefined);
   };
 
+  const handleSignOut = async () => {
+    try {
+      const { signOutFromGoogle } = await import('./src/services/authService');
+      await signOutFromGoogle();
+    } catch {
+      // Ignore sign-out errors — clear local session regardless.
+    }
+    setUserName('');
+    setUserPhoto(null);
+    setIsAuthenticated(false);
+    AsyncStorage.removeItem('userSession').catch(() => {});
+    screenHistoryRef.current = [];
+    setScreen('gmail-login');
+  };
+
   const handleImportData = () => {
     setIsImportDataModalVisible(false);
     importGuestSessionHistory().catch(() => undefined);
@@ -217,6 +232,7 @@ function App() {
           isGuest={!isAuthenticated}
           isSigningIn={isSigningIn}
           onGuestSignIn={() => handleGoogleLogin('profile')}
+          onSignOut={handleSignOut}
           onBack={navigateBack}
         />
       ) : screen === 'settings' ? (
