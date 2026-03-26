@@ -42,6 +42,7 @@ import {
   syncDailyGoalProgress,
 } from '../storage/dailyGoal';
 import { playCompletionSound } from '../services/soundService';
+import { useTimerContext } from '../context/TimerContext';
 
 const PURPLE = '#7F5AF0';
 const PINK = '#C084FC';
@@ -171,12 +172,16 @@ export default function HomeScreen({
     [focusDuration, shortBreak, longBreak],
   );
 
-  const [totalDurationMs, setTotalDurationMs] = React.useState(() => focusDuration * 60 * 1000);
-  const [sessionType, setSessionType] = React.useState<SessionType>('focus');
-  const [remainingMs, setRemainingMs] = React.useState(() => focusDuration * 60 * 1000);
-  const [isRunning, setIsRunning] = React.useState(false);
-  const [hasStarted, setHasStarted] = React.useState(false);
-  const [completedFocusCycles, setCompletedFocusCycles] = React.useState(0);
+  // ─── persistent timer state from context (survives navigation) ───────────
+  const {
+    remainingMs, setRemainingMs,
+    totalDurationMs, setTotalDurationMs,
+    sessionType, setSessionType,
+    isRunning, setIsRunning,
+    hasStarted, setHasStarted,
+    completedFocusCycles, setCompletedFocusCycles,
+    timerRunVersion, setTimerRunVersion,
+  } = useTimerContext();
   const [isCompletionModalVisible, setIsCompletionModalVisible] = React.useState(false);
   const [isEndSessionModalVisible, setIsEndSessionModalVisible] = React.useState(false);
   const [completionKind, setCompletionKind] = React.useState<CompletionKind>('focus');
@@ -191,7 +196,6 @@ export default function HomeScreen({
   const [customTagName, setCustomTagName] = React.useState('');
   const [customTagEmoji, setCustomTagEmoji] = React.useState('✨');
   const [tagLimitMessage, setTagLimitMessage] = React.useState('');
-  const [timerRunVersion, setTimerRunVersion] = React.useState(0);
   const [dailyGoal, setDailyGoal] = React.useState(DEFAULT_DAILY_GOAL);
   const [sessionsCompletedToday, setSessionsCompletedToday] = React.useState(0);
   const remainingMsRef = React.useRef(remainingMs);
@@ -199,6 +203,25 @@ export default function HomeScreen({
   React.useEffect(() => {
     remainingMsRef.current = remainingMs;
   }, [remainingMs]);
+
+  // Pause timer when navigating away (HomeScreen unmounts)
+  const pauseStateRef = React.useRef({ isRunning, setIsRunning, setRemainingMs, endAtRef });
+  React.useEffect(() => {
+    pauseStateRef.current = { isRunning, setIsRunning, setRemainingMs, endAtRef };
+  });
+  React.useEffect(() => {
+    return () => {
+      const { isRunning: running, setIsRunning: pause, setRemainingMs: saveMs, endAtRef: endRef } =
+        pauseStateRef.current;
+      if (running) {
+        if (endRef.current) {
+          saveMs(Math.max(0, endRef.current - Date.now()));
+        }
+        pause(false);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // only on unmount
 
   React.useEffect(() => {
     let isMounted = true;

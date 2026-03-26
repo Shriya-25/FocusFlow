@@ -31,6 +31,7 @@ import {
   importGuestSessionHistory,
 } from './src/storage/sessionHistory';
 import { BRAND } from './src/utils/brand';
+import { TimerProvider } from './src/context/TimerContext';
 
 type Screen =
   | 'onboarding'
@@ -178,7 +179,8 @@ function App() {
   if (!isReady) return null;
 
   return (
-    <SafeAreaProvider>
+    <TimerProvider>
+      <SafeAreaProvider>
       {screen === 'onboarding' ? (
         <OnboardingScreen
           onComplete={() => {
@@ -265,7 +267,8 @@ function App() {
           </View>
         </View>
       </Modal>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </TimerProvider>
   );
 }
 
