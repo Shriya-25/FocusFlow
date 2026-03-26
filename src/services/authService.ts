@@ -1,68 +1,90 @@
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
+const WEB_CLIENT_ID =
+  '214255387281-jlm6m1n1l07piv2s7poq015kq4hks40k.apps.googleusercontent.com';
+
+// Configure eagerly so it's ready before any sign-in attempt.
 GoogleSignin.configure({
-  webClientId:
-    '214255387281-jlm6m1n1l07piv2s7poq015kq4hks40k.apps.googleusercontent.com',
+  webClientId: WEB_CLIENT_ID,
   offlineAccess: false,
 });
+
+/** Re-configure before each sign-in to ensure the SDK is never left in a bad
+ *  state after sign-out (observed on some devices with google-signin v13+). */
+const ensureConfigured = () => {
+  GoogleSignin.configure({
+    webClientId: WEB_CLIENT_ID,
+    offlineAccess: false,
+  });
+};
 
 const readIdTokenFromSignInResult = (value: unknown): string | null => {
   if (!value || typeof value !== 'object') {
     return null;
   }
 
-  const direct = (value as { idToken?: unknown }).idToken;
-  if (typeof direct === 'string' && direct.length > 0) {
-    return direct;
+  // v13+ SDK: { type: 'success', data: { idToken, ... } }
+  const typed = value as { type?: string; data?: { idToken?: unknown }; idToken?: unknown };
+  if (typed.type === 'cancelled') {
+    return null; // user dismissed the picker — not an error
+  }
+  if (typed.type === 'success' && typed.data && typeof typed.data.idToken === 'string') {
+    return typed.data.idToken;
   }
 
-  const data = (value as { data?: { idToken?: unknown } }).data;
-  if (data && typeof data.idToken === 'string' && data.idToken.length > 0) {
-    return data.idToken;
+  // Legacy / direct shape: { idToken: '...' }
+  if (typeof typed.idToken === 'string' && typed.idToken.length > 0) {
+    return typed.idToken;
+  }
+
+  // Nested data shape without a type discriminant
+  if (typed.data && typeof typed.data.idToken === 'string' && typed.data.idToken.length > 0) {
+    return typed.data.idToken;
   }
 
   return null;
 };
 
 export async function signInWithGoogle() {
-  const googleApi = GoogleSignin as {
-    hasPlayServices?: (options?: { showPlayServicesUpdateDialog?: boolean }) => Promise<unknown>;
-    signIn?: () => Promise<unknown>;
-  };
-  if (typeof googleApi.hasPlayServices === 'function') {
-    await googleApi.hasPlayServices({ showPlayServicesUpdateDialog: true });
+  ensureConfigured();
+
+  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+  const signInResult = await GoogleSignin.signIn();
+
+  // User cancelled — throw a user-friendly message so the caller can display it.
+  if (
+    signInResult &&
+    typeof signInResult === 'object' &&
+    (signInResult as { type?: string }).type === 'cancelled'
+  ) {
+    throw new Error('Sign-in was cancelled.');
   }
 
-  if (typeof googleApi.signIn !== 'function') {
-    throw new Error('Google Sign-In is not available on this build. Rebuild the app and try again.');
-  }
-
-  const signInResult = await googleApi.signIn();
   const idToken = readIdTokenFromSignInResult(signInResult);
 
   if (!idToken) {
-    throw new Error('Google Sign-In did not return an idToken.');
+    throw new Error('Google Sign-In did not return an idToken. Please try again.');
   }
 
-  const authModule = auth as unknown as {
-    GoogleAuthProvider?: { credential?: (token: string) => unknown };
-  };
-  const credentialFactory = authModule.GoogleAuthProvider?.credential;
-  if (typeof credentialFactory !== 'function') {
-    throw new Error('Firebase Google auth is not configured correctly.');
+  // @react-native-firebase/auth v23 exposes GoogleAuthProvider on the default export.
+  const GoogleAuthProvider = (auth as unknown as { GoogleAuthProvider: { credential: (token: string) => unknown } }).GoogleAuthProvider;
+  if (!GoogleAuthProvider || typeof GoogleAuthProvider.credential !== 'function') {
+    throw new Error('Firebase GoogleAuthProvider is not available. Rebuild the app.');
   }
 
-  const googleCredential = credentialFactory(idToken);
-  const firebaseAuth = auth();
-  if (typeof firebaseAuth.signInWithCredential !== 'function') {
-    throw new Error('Firebase sign-in method is unavailable in this build.');
-  }
-
-  return firebaseAuth.signInWithCredential(googleCredential);
+  const googleCredential = GoogleAuthProvider.credential(idToken);
+  return auth().signInWithCredential(
+    googleCredential as Parameters<ReturnType<typeof auth>['signInWithCredential']>[0],
+  );
 }
 
 export async function signOutFromGoogle() {
-  await GoogleSignin.signOut();
+  try {
+    await GoogleSignin.signOut();
+  } catch {
+    // GoogleSignin.signOut can throw if the user was already signed out.
+  }
   return auth().signOut();
 }

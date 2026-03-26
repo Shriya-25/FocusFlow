@@ -31,6 +31,7 @@ import {
   hasGuestSessionHistory,
   importGuestSessionHistory,
 } from './src/storage/sessionHistory';
+import { signInWithGoogle, signOutFromGoogle } from './src/services/authService';
 import { BRAND } from './src/utils/brand';
 import { TimerProvider } from './src/context/TimerContext';
 
@@ -142,7 +143,6 @@ function App() {
     setIsSigningIn(true);
 
     try {
-      const { signInWithGoogle } = await import('./src/services/authService');
       const userCredential = await signInWithGoogle();
       const name = userCredential.user.displayName ?? userCredential.user.email ?? 'User';
       const photo = userCredential.user.photoURL ?? null;
@@ -177,7 +177,6 @@ function App() {
 
   const handleSignOut = async () => {
     try {
-      const { signOutFromGoogle } = await import('./src/services/authService');
       await signOutFromGoogle();
     } catch {
       // Ignore sign-out errors — clear local session regardless.
