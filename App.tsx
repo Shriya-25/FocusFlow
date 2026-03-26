@@ -4,8 +4,10 @@
  */
 
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
+  BackHandler,
   Modal,
   Pressable,
   StyleSheet,
@@ -47,19 +49,85 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [isSigningIn, setIsSigningIn] = React.useState(false);
   const [isImportDataModalVisible, setIsImportDataModalVisible] = React.useState(false);
+  const [isReady, setIsReady] = React.useState(false);
+
+  // Refs for stable history navigation (avoids stale closures)
+  const screenHistoryRef = React.useRef<Screen[]>([]);
+  const screenRef = React.useRef<Screen>('onboarding');
+  React.useLayoutEffect(() => { screenRef.current = screen; }, [screen]);
+
+  // Forward navigation — pushes current screen onto history
+  const navigateTo = React.useCallback((newScreen: Screen) => {
+    screenHistoryRef.current = [...screenHistoryRef.current, screenRef.current];
+    setScreen(newScreen);
+  }, []);
+
+  // Back navigation — pops history; returns true if handled
+  const navigateBack = React.useCallback((): boolean => {
+    if (screenHistoryRef.current.length === 0) return false;
+    const prev = screenHistoryRef.current[screenHistoryRef.current.length - 1];
+    screenHistoryRef.current = screenHistoryRef.current.slice(0, -1);
+    setScreen(prev);
+    return true;
+  }, []);
 
   React.useEffect(() => {
     hydrateSettingsStore().catch(() => undefined);
   }, []);
+
+  // Restore session or decide start screen
+  React.useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem('hasSeenOnboarding'),
+      AsyncStorage.getItem('userSession'),
+    ])
+      .then(([seenOnboarding, sessionJson]) => {
+        if (sessionJson) {
+          // Returning user — restore session and go straight to Home
+          try {
+            const session = JSON.parse(sessionJson);
+            setUserName(session.userName ?? 'Guest');
+            setUserPhoto(session.userPhoto ?? null);
+            setIsAuthenticated(session.isAuthenticated ?? false);
+          } catch {
+            // corrupt data — fall through to login
+          }
+          setScreen('home');
+        } else if (seenOnboarding !== null) {
+          // Seen onboarding but no saved session → login screen
+          setScreen('gmail-login');
+        }
+        // else: fresh install → stay on 'onboarding'
+        setIsReady(true);
+      })
+      .catch(() => setIsReady(true));
+  }, []);
+
+  // Handle Android hardware back button
+  React.useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', navigateBack);
+    return () => sub.remove();
+  }, [navigateBack]);
+
+  const saveSession = React.useCallback(
+    (name: string, photo: string | null, authenticated: boolean) => {
+      AsyncStorage.setItem(
+        'userSession',
+        JSON.stringify({ userName: name, userPhoto: photo, isAuthenticated: authenticated }),
+      ).catch(() => {});
+    },
+    [],
+  );
 
   const finalizeSignIn = React.useCallback(
     (name: string, photo: string | null, targetScreen: 'home' | 'profile') => {
       setUserName(name);
       setUserPhoto(photo);
       setIsAuthenticated(true);
-      setScreen(targetScreen);
+      saveSession(name, photo, true);
+      navigateTo(targetScreen);
     },
-    [],
+    [navigateTo, saveSession],
   );
 
   const handleGoogleLogin = async (targetScreen: 'home' | 'profile' = 'home') => {
@@ -93,7 +161,8 @@ function App() {
     setUserName('Guest');
     setUserPhoto(null);
     setIsAuthenticated(false);
-    setScreen('home');
+    saveSession('Guest', null, false);
+    navigateTo('home');
   };
 
   const handleImportStartFresh = () => {
@@ -106,12 +175,20 @@ function App() {
     importGuestSessionHistory().catch(() => undefined);
   };
 
+  if (!isReady) return null;
+
   return (
     <SafeAreaProvider>
       {screen === 'onboarding' ? (
         <OnboardingScreen
-          onComplete={() => setScreen('gmail-login')}
-          onLoginPress={() => setScreen('gmail-login')}
+          onComplete={() => {
+            AsyncStorage.setItem('hasSeenOnboarding', 'true').catch(() => {});
+            navigateTo('gmail-login');
+          }}
+          onLoginPress={() => {
+            AsyncStorage.setItem('hasSeenOnboarding', 'true').catch(() => {});
+            navigateTo('gmail-login');
+          }}
         />
       ) : screen === 'gmail-login' ? (
         <GmailLoginScreen onGoogleLogin={() => handleGoogleLogin('home')} onSkip={handleSkip} />
@@ -123,20 +200,20 @@ function App() {
           isGuest={!isAuthenticated}
           isSigningIn={isSigningIn}
           onGuestSignIn={() => handleGoogleLogin('profile')}
-          onBack={() => setScreen('home')}
+          onBack={navigateBack}
         />
       ) : screen === 'settings' ? (
         <SettingsScreen
-          onBack={() => setScreen('home')}
-          onAboutPomodoroPress={() => setScreen('about-pomodoro')}
+          onBack={navigateBack}
+          onAboutPomodoroPress={() => navigateTo('about-pomodoro')}
         />
       ) : screen === 'about-pomodoro' ? (
-        <AboutPomodoroScreen onBack={() => setScreen('settings')} />
+        <AboutPomodoroScreen onBack={navigateBack} />
       ) : screen === 'statistics' ? (
         <StatisticsScreen
-          onBack={() => setScreen('home')}
+          onBack={navigateBack}
           isGuestUser={!isAuthenticated}
-          onSignInPress={() => setScreen('gmail-login')}
+          onSignInPress={() => navigateTo('gmail-login')}
         />
       ) : (
         <HomeScreen
@@ -144,9 +221,9 @@ function App() {
           userPhoto={userPhoto}
           avatarEmoji={selectedAvatar}
           isGuestUser={!isAuthenticated}
-          onProfilePress={() => setScreen('profile')}
-          onStatisticsPress={() => setScreen('statistics')}
-          onSettingsPress={() => setScreen('settings')}
+          onProfilePress={() => navigateTo('profile')}
+          onStatisticsPress={() => navigateTo('statistics')}
+          onSettingsPress={() => navigateTo('settings')}
         />
       )}
 
