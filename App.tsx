@@ -121,22 +121,17 @@ function App() {
     [],
   );
 
-  // Replace-style navigation: clears the history stack so the user can never
-  // back-navigate to the login or onboarding screens after authenticating.
-  const replaceScreen = React.useCallback((newScreen: Screen) => {
-    screenHistoryRef.current = [];
-    setScreen(newScreen);
-  }, []);
-
   const finalizeSignIn = React.useCallback(
     (name: string, photo: string | null, targetScreen: 'home' | 'profile') => {
       setUserName(name);
       setUserPhoto(photo);
       setIsAuthenticated(true);
       saveSession(name, photo, true);
-      replaceScreen(targetScreen);
+      // Clear history so back-button can never reach login/onboarding after auth.
+      screenHistoryRef.current = [];
+      setScreen(targetScreen);
     },
-    [replaceScreen, saveSession],
+    [saveSession],
   );
 
   const handleGoogleLogin = async (targetScreen: 'home' | 'profile' = 'home') => {
@@ -171,7 +166,8 @@ function App() {
     setUserPhoto(null);
     setIsAuthenticated(false);
     saveSession('Guest', null, false);
-    replaceScreen('home');
+    screenHistoryRef.current = [];
+    setScreen('home');
   };
 
   const handleImportStartFresh = () => {
